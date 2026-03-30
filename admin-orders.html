@@ -112,6 +112,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   Auth.requireAuth('admin');
   Auth.initSidebarUser();
@@ -123,11 +124,13 @@
   let editingId = null;
 
   async function load() {
-    [allOrders, allCustomers, allItems, allProducts] = await Promise.all([
-      API.orders.getAll(), API.customers.getAll(),
-      API.orderItems.getAll(), API.products.getAll()
-    ]);
-    renderTable(allOrders);
+    try {
+      [allOrders, allCustomers, allItems, allProducts] = await Promise.all([
+        OrderAPI.getAll(), CustomerAPI.getAll(),
+        OrderItemAPI.getAll(), ProductAPI.getAll()
+      ]);
+      renderTable(allOrders);
+    } catch (error) { showToast('Failed to load: ' + error.message, 'error'); }
   }
 
   const custMap = () => Object.fromEntries(allCustomers.map(c => [c.Customer_ID, c.Name]));
@@ -142,7 +145,7 @@
       body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No orders found</div></div></td></tr>';
       return;
     }
-    const sorted = [...data].sort((a,b) => b.Order_date.localeCompare(a.Order_date));
+    const sorted = [...data].sort((a,b) => (b.Order_date||'').localeCompare(a.Order_date||''));
     body.innerHTML = sorted.map(o => `
       <tr>
         <td class="fw-700">${o.Order_ID}</td>
@@ -153,8 +156,8 @@
         <td>${statusBadge(o.Order_status)}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="viewOrder('${o.Order_ID}')">👁️ View</button>
-            <button class="btn btn-secondary btn-xs" onclick="editOrder('${o.Order_ID}','${o.Order_status}')">✏️</button>
+            <button class="btn btn-secondary btn-xs" onclick="viewOrder(${o.Order_ID})">👁️ View</button>
+            <button class="btn btn-secondary btn-xs" onclick="editOrder(${o.Order_ID},'${o.Order_status}')">✏️</button>
           </div>
         </td>
       </tr>`).join('');
@@ -166,14 +169,15 @@
     const dt = document.getElementById('date-filter').value;
     const cm = custMap();
     renderTable(allOrders.filter(o =>
-      (!q || o.Order_ID.toLowerCase().includes(q) || (cm[o.Customer_ID]||'').toLowerCase().includes(q)) &&
+      (!q || String(o.Order_ID).includes(q) || (cm[o.Customer_ID]||'').toLowerCase().includes(q)) &&
       (!st || o.Order_status === st) &&
       (!dt || o.Order_date === dt)
     ));
   }
 
-  async function viewOrder(oid) {
+  function viewOrder(oid) {
     const order = allOrders.find(o => o.Order_ID === oid);
+    if (!order) return;
     const cm = custMap(), pm = prodMap();
     const items = allItems.filter(i => i.Order_ID === oid);
     document.getElementById('detail-title').textContent = `Order ${oid}`;
@@ -213,10 +217,12 @@
 
   async function saveOrderStatus() {
     const status = document.getElementById('f-order-status').value;
-    await API.orders.update(editingId, { Order_status: status });
-    showToast('Order status updated!');
-    closeModal('edit-order-modal');
-    load();
+    try {
+      await OrderAPI.update(editingId, { Order_status: status });
+      showToast('Order status updated!');
+      closeModal('edit-order-modal');
+      load();
+    } catch (error) { showToast('Failed to update: ' + error.message, 'error'); }
   }
 
   load();

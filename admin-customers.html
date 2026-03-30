@@ -163,8 +163,8 @@
         <td>${statusBadge(c.Account_Status)}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editCustomer('${c.Customer_ID}')">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteCustomer('${c.Customer_ID}')">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editCustomer(${c.Customer_ID})">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteCustomer(${c.Customer_ID})">🗑️</button>
           </div>
         </td>
       </tr>`).join('');

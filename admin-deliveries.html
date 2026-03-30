@@ -120,6 +120,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   Auth.requireAuth('admin');
   Auth.initSidebarUser();
@@ -131,13 +132,15 @@
   let editingId = null;
 
   async function load() {
-    [allDeliveries, allDPs, allOrders] = await Promise.all([
-      API.deliveries.getAll(), API.deliveryPersons.getAll(), API.orders.getAll()
-    ]);
-    document.getElementById('d-del').textContent  = allDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
-    document.getElementById('d-pen').textContent  = allDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
-    document.getElementById('d-fail').textContent = allDeliveries.filter(d => d.Delivery_Status === 'Failed').length;
-    renderTable(allDeliveries);
+    try {
+      [allDeliveries, allDPs, allOrders] = await Promise.all([
+        DeliveryAPI.getAll(), DeliveryPersonAPI.getAll(), OrderAPI.getAll()
+      ]);
+      document.getElementById('d-del').textContent  = allDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
+      document.getElementById('d-pen').textContent  = allDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
+      document.getElementById('d-fail').textContent = allDeliveries.filter(d => d.Delivery_Status === 'Failed').length;
+      renderTable(allDeliveries);
+    } catch (error) { showToast('Failed to load: ' + error.message, 'error'); }
   }
 
   const dpMap = () => Object.fromEntries(allDPs.map(d => [d.DeliveryPerson_ID, d.Name]));
@@ -149,7 +152,7 @@
       body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🚚</div><div class="empty-title">No deliveries found</div></div></td></tr>';
       return;
     }
-    body.innerHTML = [...data].sort((a,b) => b.Delivery_date.localeCompare(a.Delivery_date)).map(d => `
+    body.innerHTML = [...data].sort((a,b) => (b.Delivery_date||'').localeCompare(a.Delivery_date||'')).map(d => `
       <tr>
         <td class="fw-700">${d.Delivery_ID}</td>
         <td>${d.Order_ID}</td>
@@ -158,8 +161,8 @@
         <td>${dm[d.DeliveryPerson_ID] || d.DeliveryPerson_ID}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editDelivery('${d.Delivery_ID}')">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteDelivery('${d.Delivery_ID}')">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editDelivery(${d.Delivery_ID})">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteDelivery(${d.Delivery_ID})">🗑️</button>
           </div>
         </td>
       </tr>`).join('');
@@ -169,14 +172,14 @@
     const q  = document.getElementById('search-input').value.toLowerCase();
     const st = document.getElementById('status-filter').value;
     renderTable(allDeliveries.filter(d =>
-      (!q || d.Delivery_ID.toLowerCase().includes(q) || d.Order_ID.toLowerCase().includes(q)) &&
+      (!q || String(d.Delivery_ID).includes(q) || String(d.Order_ID).includes(q)) &&
       (!st || d.Delivery_Status === st)
     ));
   }
 
   function populateDropdowns() {
     document.getElementById('f-order').innerHTML = allOrders.map(o => `<option value="${o.Order_ID}">${o.Order_ID} (${formatCurrency(o.Total_amount)})</option>`).join('');
-    document.getElementById('f-dp').innerHTML = allDPs.map(d => `<option value="${d.DeliveryPerson_ID}">${d.Name} — ${d.Area_assigned}</option>`).join('');
+    document.getElementById('f-dp').innerHTML = allDPs.map(d => `<option value="${d.DeliveryPerson_ID}">${d.Name} — ${d.Area_assigned||''}</option>`).join('');
   }
 
   function openAddModal() {
@@ -203,28 +206,32 @@
 
   async function saveDelivery() {
     const data = {
-      Order_ID: document.getElementById('f-order').value,
-      DeliveryPerson_ID: document.getElementById('f-dp').value,
+      Order_ID: parseInt(document.getElementById('f-order').value),
+      DeliveryPerson_ID: parseInt(document.getElementById('f-dp').value),
       Delivery_date: document.getElementById('f-date').value,
       Delivery_Status: document.getElementById('f-status').value,
     };
     if (!data.Delivery_date) { showToast('Please select a delivery date', 'error'); return; }
-    if (editingId) {
-      await API.deliveries.update(editingId, data);
-      showToast('Delivery updated!');
-    } else {
-      await API.deliveries.create(data);
-      showToast('Delivery added!');
-    }
-    closeModal('delivery-modal');
-    load();
+    try {
+      if (editingId) {
+        await DeliveryAPI.update(editingId, data);
+        showToast('Delivery updated!');
+      } else {
+        await DeliveryAPI.create(data);
+        showToast('Delivery added!');
+      }
+      closeModal('delivery-modal');
+      load();
+    } catch (error) { showToast('Failed to save: ' + error.message, 'error'); }
   }
 
   async function deleteDelivery(id) {
     if (!confirmAction('Delete this delivery record?')) return;
-    await API.deliveries.delete(id);
-    showToast('Delivery deleted', 'warning');
-    load();
+    try {
+      await DeliveryAPI.delete(id);
+      showToast('Delivery deleted', 'warning');
+      load();
+    } catch (error) { showToast('Failed to delete: ' + error.message, 'error'); }
   }
 
   load();

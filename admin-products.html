@@ -99,6 +99,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   Auth.requireAuth('admin');
   Auth.initSidebarUser();
@@ -106,7 +107,7 @@
   buildAdminSidebar('admin-products.html');
   initModalClosers();
 
-  let allProducts = [], allSuppliers = [], supplierProducts = [];
+  let allProducts = [];
   let editingId = null;
 
   const PRODUCT_EMOJIS = { 'Milk': '🥛', 'Curd': '🍶', 'Paneer': '🧀', 'Spinach': '🥬', 'Tomato': '🍅', 'Carrot': '🥕', 'Beans': '🫛' };
@@ -116,14 +117,12 @@
   }
 
   async function load() {
-    [allProducts, allSuppliers, supplierProducts] = await Promise.all([
-      API.products.getAll(), API.suppliers.getAll(), API.supplierProducts.getAll()
-    ]);
-    renderTable(allProducts);
-  }
-
-  function getProductSuppliers(pid) {
-    return supplierProducts.filter(sp => sp.Product_ID === pid).map(sp => allSuppliers.find(s => s.Supplier_ID === sp.Supplier_ID)?.Supplier_Name).filter(Boolean);
+    try {
+      allProducts = await ProductAPI.getAll();
+      renderTable(allProducts);
+    } catch (error) {
+      showToast('Failed to load: ' + error.message, 'error');
+    }
   }
 
   function renderTable(data) {
@@ -132,22 +131,19 @@
       body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🛒</div><div class="empty-title">No products found</div></div></td></tr>';
       return;
     }
-    body.innerHTML = data.map(p => {
-      const supps = getProductSuppliers(p.Product_ID);
-      return `<tr>
+    body.innerHTML = data.map(p => `<tr>
         <td class="td-muted">${p.Product_ID}</td>
         <td><span style="font-size:18px;margin-right:6px">${productEmoji(p.Product_Name)}</span><strong>${p.Product_Name}</strong></td>
         <td><span class="fw-700" style="color:var(--primary)">₹${p.Price_per_unit}</span></td>
         <td><span class="badge badge-muted">${p.Unit}</span></td>
-        <td>${supps.map(s => `<span class="badge badge-info" style="margin:2px">${s}</span>`).join('') || '<span class="td-muted">-</span>'}</td>
+        <td><span class="td-muted">-</span></td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editProduct('${p.Product_ID}')">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteProduct('${p.Product_ID}')">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editProduct(${p.Product_ID})">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteProduct(${p.Product_ID})">🗑️</button>
           </div>
         </td>
-      </tr>`;
-    }).join('');
+      </tr>`).join('');
   }
 
   function filterTable() {
@@ -179,22 +175,30 @@
     const unit  = document.getElementById('f-unit').value.trim();
     if (!name || isNaN(price) || !unit) { showToast('Please fill all required fields', 'error'); return; }
     const data = { Product_Name: name, Price_per_unit: price, Unit: unit };
-    if (editingId) {
-      await API.products.update(editingId, data);
-      showToast('Product updated!');
-    } else {
-      await API.products.create(data);
-      showToast('Product added!');
+    try {
+      if (editingId) {
+        await ProductAPI.update(editingId, data);
+        showToast('Product updated!');
+      } else {
+        await ProductAPI.create(data);
+        showToast('Product added!');
+      }
+      closeModal('product-modal');
+      load();
+    } catch (error) {
+      showToast('Failed to save: ' + error.message, 'error');
     }
-    closeModal('product-modal');
-    load();
   }
 
   async function deleteProduct(id) {
     if (!confirmAction('Delete this product?')) return;
-    await API.products.delete(id);
-    showToast('Product deleted', 'warning');
-    load();
+    try {
+      await ProductAPI.delete(id);
+      showToast('Product deleted', 'warning');
+      load();
+    } catch (error) {
+      showToast('Failed to delete: ' + error.message, 'error');
+    }
   }
 
   load();

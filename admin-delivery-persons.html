@@ -119,6 +119,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   Auth.requireAuth('admin');
   Auth.initSidebarUser();
@@ -132,22 +133,24 @@
   const vehicleEmoji = v => ({ Bicycle:'🚲', Motorbike:'🏍️', 'E-Bike':'⚡', Auto:'🛺' }[v] || '🚗');
 
   async function load() {
-    [allDPs, allDeliveries] = await Promise.all([API.deliveryPersons.getAll(), API.deliveries.getAll()]);
-    renderCards(allDPs);
-    renderTable(allDPs);
+    try {
+      [allDPs, allDeliveries] = await Promise.all([DeliveryPersonAPI.getAll(), DeliveryAPI.getAll()]);
+      renderCards(allDPs);
+      renderTable(allDPs);
+    } catch (error) { showToast('Failed to load: ' + error.message, 'error'); }
   }
 
   function getDPDeliveries(id) { return allDeliveries.filter(d => d.DeliveryPerson_ID === id).length; }
 
   function renderCards(data) {
     document.getElementById('dp-cards').innerHTML = data.map(dp => `
-      <div class="card" style="padding:20px;text-align:center;cursor:pointer;transition:var(--transition)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''"  >
+      <div class="card" style="padding:20px;text-align:center;cursor:pointer;transition:var(--transition)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
         <div style="font-size:48px;margin-bottom:8px">${vehicleEmoji(dp.VehicleType)}</div>
         <div style="font-weight:700;font-size:1rem;margin-bottom:4px">${dp.Name}</div>
         <div class="td-muted" style="font-size:.82rem;margin-bottom:8px">${dp.Phone_Num}</div>
         <div style="display:flex;justify-content:center;gap:8px">
-          <span class="badge badge-primary">${dp.Area_assigned}</span>
-          <span class="badge badge-muted">${dp.VehicleType}</span>
+          <span class="badge badge-primary">${dp.Area_assigned||''}</span>
+          <span class="badge badge-muted">${dp.VehicleType||''}</span>
         </div>
         <div style="margin-top:10px;font-size:.78rem;color:var(--text-muted)">${getDPDeliveries(dp.DeliveryPerson_ID)} deliveries</div>
       </div>`).join('');
@@ -164,13 +167,13 @@
         <td class="td-muted">${dp.DeliveryPerson_ID}</td>
         <td><strong>${dp.Name}</strong></td>
         <td>${dp.Phone_Num}</td>
-        <td><span style="margin-right:4px">${vehicleEmoji(dp.VehicleType)}</span>${dp.VehicleType}</td>
-        <td><span class="badge badge-primary">${dp.Area_assigned}</span></td>
+        <td><span style="margin-right:4px">${vehicleEmoji(dp.VehicleType)}</span>${dp.VehicleType||''}</td>
+        <td><span class="badge badge-primary">${dp.Area_assigned||''}</span></td>
         <td><span class="badge badge-muted">${getDPDeliveries(dp.DeliveryPerson_ID)} total</span></td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editDP('${dp.DeliveryPerson_ID}')">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteDP('${dp.DeliveryPerson_ID}')">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editDP(${dp.DeliveryPerson_ID})">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteDP(${dp.DeliveryPerson_ID})">🗑️</button>
           </div>
         </td>
       </tr>`).join('');
@@ -180,7 +183,7 @@
     const q  = document.getElementById('search-input').value.toLowerCase();
     const vf = document.getElementById('vehicle-filter').value;
     const filtered = allDPs.filter(dp =>
-      (!q || dp.Name.toLowerCase().includes(q) || dp.Area_assigned.toLowerCase().includes(q)) &&
+      (!q || dp.Name.toLowerCase().includes(q) || (dp.Area_assigned||'').toLowerCase().includes(q)) &&
       (!vf || dp.VehicleType === vf)
     );
     renderCards(filtered);
@@ -202,8 +205,8 @@
     document.getElementById('modal-title').textContent = 'Edit Delivery Person';
     document.getElementById('f-name').value    = dp.Name;
     document.getElementById('f-phone').value   = dp.Phone_Num;
-    document.getElementById('f-vehicle').value = dp.VehicleType;
-    document.getElementById('f-area').value    = dp.Area_assigned;
+    document.getElementById('f-vehicle').value = dp.VehicleType||'Bicycle';
+    document.getElementById('f-area').value    = dp.Area_assigned||'';
     openModal('dp-modal');
   }
 
@@ -214,22 +217,26 @@
     const area    = document.getElementById('f-area').value.trim();
     if (!name || !phone || !area) { showToast('Please fill all required fields', 'error'); return; }
     const data = { Name: name, Phone_Num: phone, VehicleType: vehicle, Area_assigned: area };
-    if (editingId) {
-      await API.deliveryPersons.update(editingId, data);
-      showToast('Updated successfully!');
-    } else {
-      await API.deliveryPersons.create(data);
-      showToast('Delivery person added!');
-    }
-    closeModal('dp-modal');
-    load();
+    try {
+      if (editingId) {
+        await DeliveryPersonAPI.update(editingId, data);
+        showToast('Updated successfully!');
+      } else {
+        await DeliveryPersonAPI.create(data);
+        showToast('Delivery person added!');
+      }
+      closeModal('dp-modal');
+      load();
+    } catch (error) { showToast('Failed to save: ' + error.message, 'error'); }
   }
 
   async function deleteDP(id) {
     if (!confirmAction('Remove this delivery person?')) return;
-    await API.deliveryPersons.delete(id);
-    showToast('Deleted', 'warning');
-    load();
+    try {
+      await DeliveryPersonAPI.delete(id);
+      showToast('Deleted', 'warning');
+      load();
+    } catch (error) { showToast('Failed to delete: ' + error.message, 'error'); }
   }
 
   load();

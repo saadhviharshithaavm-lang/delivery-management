@@ -115,6 +115,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   Auth.requireAuth('admin');
   Auth.initSidebarUser();
@@ -122,22 +123,21 @@
   buildAdminSidebar('admin-suppliers.html');
   initModalClosers();
 
-  let allSuppliers = [], allProducts = [], supplierProducts = [], allSubs = [];
+  let allSuppliers = [], allProducts = [], allSubs = [];
   let editingId = null;
 
   async function load() {
-    [allSuppliers, allProducts, supplierProducts, allSubs] = await Promise.all([
-      API.suppliers.getAll(), API.products.getAll(),
-      API.supplierProducts.getAll(), API.subscriptions.getAll()
-    ]);
-    document.getElementById('stat-total').textContent = allSuppliers.length;
-    document.getElementById('stat-products').textContent = new Set(supplierProducts.map(sp => sp.Product_ID)).size;
-    document.getElementById('stat-subs').textContent = allSubs.filter(s => s.Status === 'Active').length;
-    renderTable(allSuppliers);
-  }
-
-  function getSupplierProducts(sid) {
-    return supplierProducts.filter(sp => sp.Supplier_ID === sid).map(sp => allProducts.find(p => p.Product_ID === sp.Product_ID)?.Product_Name).filter(Boolean);
+    try {
+      [allSuppliers, allProducts, allSubs] = await Promise.all([
+        SupplierAPI.getAll(), ProductAPI.getAll(), SubscriptionAPI.getAll()
+      ]);
+      document.getElementById('stat-total').textContent = allSuppliers.length;
+      document.getElementById('stat-products').textContent = allProducts.length;
+      document.getElementById('stat-subs').textContent = allSubs.filter(s => s.Status === 'Active').length;
+      renderTable(allSuppliers);
+    } catch (error) {
+      showToast('Failed to load: ' + error.message, 'error');
+    }
   }
 
   function renderTable(data) {
@@ -146,21 +146,18 @@
       body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🏭</div><div class="empty-title">No suppliers found</div></div></td></tr>';
       return;
     }
-    body.innerHTML = data.map(s => {
-      const prods = getSupplierProducts(s.Supplier_ID);
-      return `<tr>
+    body.innerHTML = data.map(s => `<tr>
         <td class="td-muted">${s.Supplier_ID}</td>
         <td><strong>${s.Supplier_Name}</strong></td>
         <td>${s.Phone_Num}</td>
-        <td>${prods.map(p => `<span class="badge badge-primary" style="margin:2px">${p}</span>`).join('') || '<span class="td-muted">None</span>'}</td>
+        <td>-</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editSupplier('${s.Supplier_ID}')">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteSupplier('${s.Supplier_ID}')">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editSupplier(${s.Supplier_ID})">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteSupplier(${s.Supplier_ID})">🗑️</button>
           </div>
         </td>
-      </tr>`;
-    }).join('');
+      </tr>`).join('');
   }
 
   function filterTable() {
@@ -168,20 +165,11 @@
     renderTable(allSuppliers.filter(s => !q || s.Supplier_Name.toLowerCase().includes(q) || s.Phone_Num.includes(q)));
   }
 
-  function buildProductCheckboxes(selectedPids = []) {
-    document.getElementById('product-checkboxes').innerHTML = allProducts.map(p => `
-      <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:.83rem">
-        <input type="checkbox" value="${p.Product_ID}" ${selectedPids.includes(p.Product_ID)?'checked':''} />
-        ${p.Product_Name}
-      </label>`).join('');
-  }
-
   function openAddModal() {
     editingId = null;
     document.getElementById('modal-title').textContent = 'Add Supplier';
     document.getElementById('f-name').value = '';
     document.getElementById('f-phone').value = '';
-    buildProductCheckboxes();
     openModal('supplier-modal');
   }
 
@@ -192,8 +180,6 @@
     document.getElementById('modal-title').textContent = 'Edit Supplier';
     document.getElementById('f-name').value  = s.Supplier_Name;
     document.getElementById('f-phone').value = s.Phone_Num;
-    const selected = supplierProducts.filter(sp => sp.Supplier_ID === id).map(sp => sp.Product_ID);
-    buildProductCheckboxes(selected);
     openModal('supplier-modal');
   }
 
@@ -201,29 +187,30 @@
     const name  = document.getElementById('f-name').value.trim();
     const phone = document.getElementById('f-phone').value.trim();
     if (!name || !phone) { showToast('Please fill all required fields', 'error'); return; }
-    const selectedPids = [...document.querySelectorAll('#product-checkboxes input:checked')].map(cb => cb.value);
-
-    if (editingId) {
-      await API.suppliers.update(editingId, { Supplier_Name: name, Phone_Num: phone });
-      // rebuild supplier_products
-      const existing = supplierProducts.filter(sp => sp.Supplier_ID === editingId).map(sp => sp.Product_ID);
-      for (const pid of existing) if (!selectedPids.includes(pid)) await API.supplierProducts.delete(editingId, pid);
-      for (const pid of selectedPids) if (!existing.includes(pid)) await API.supplierProducts.create({ Supplier_ID: editingId, Product_ID: pid });
-      showToast('Supplier updated!');
-    } else {
-      const s = await API.suppliers.create({ Supplier_Name: name, Phone_Num: phone });
-      for (const pid of selectedPids) await API.supplierProducts.create({ Supplier_ID: s.Supplier_ID, Product_ID: pid });
-      showToast('Supplier added!');
+    try {
+      if (editingId) {
+        await SupplierAPI.update(editingId, { Supplier_Name: name, Phone_Num: phone });
+        showToast('Supplier updated!');
+      } else {
+        await SupplierAPI.create({ Supplier_Name: name, Phone_Num: phone });
+        showToast('Supplier added!');
+      }
+      closeModal('supplier-modal');
+      load();
+    } catch (error) {
+      showToast('Failed to save: ' + error.message, 'error');
     }
-    closeModal('supplier-modal');
-    load();
   }
 
   async function deleteSupplier(id) {
     if (!confirmAction('Delete this supplier?')) return;
-    await API.suppliers.delete(id);
-    showToast('Supplier deleted', 'warning');
-    load();
+    try {
+      await SupplierAPI.delete(id);
+      showToast('Supplier deleted', 'warning');
+      load();
+    } catch (error) {
+      showToast('Failed to delete: ' + error.message, 'error');
+    }
   }
 
   load();

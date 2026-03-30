@@ -121,6 +121,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   Auth.requireAuth('admin');
   Auth.initSidebarUser();
@@ -132,10 +133,12 @@
   let editingId = null;
 
   async function load() {
-    [allSchedules, allDeliveries] = await Promise.all([
-      API.deliverySchedules.getAll(), API.deliveries.getAll()
-    ]);
-    renderTable(allSchedules);
+    try {
+      [allSchedules, allDeliveries] = await Promise.all([
+        DeliveryScheduleAPI.getAll(), DeliveryAPI.getAll()
+      ]);
+      renderTable(allSchedules);
+    } catch (error) { showToast('Failed to load: ' + error.message, 'error'); }
   }
 
   function renderTable(data) {
@@ -144,7 +147,7 @@
       body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No schedules found</div></div></td></tr>';
       return;
     }
-    body.innerHTML = [...data].sort((a,b) => b.Scheduled_date.localeCompare(a.Scheduled_date)).map(s => `
+    body.innerHTML = [...data].sort((a,b) => (b.Scheduled_date||'').localeCompare(a.Scheduled_date||'')).map(s => `
       <tr>
         <td class="fw-700">${s.Schedule_ID}</td>
         <td>${s.Delivery_ID}</td>
@@ -153,8 +156,8 @@
         <td>${statusBadge(s.Schedule_status)}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editSchedule('${s.Schedule_ID}')">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteSchedule('${s.Schedule_ID}')">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editSchedule(${s.Schedule_ID})">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteSchedule(${s.Schedule_ID})">🗑️</button>
           </div>
         </td>
       </tr>`).join('');
@@ -165,7 +168,7 @@
     const st = document.getElementById('status-filter').value;
     const dt = document.getElementById('date-filter').value;
     renderTable(allSchedules.filter(s =>
-      (!q || s.Schedule_ID.toLowerCase().includes(q) || s.Delivery_ID.toLowerCase().includes(q)) &&
+      (!q || String(s.Schedule_ID).includes(q) || String(s.Delivery_ID).includes(q)) &&
       (!st || s.Schedule_status === st) &&
       (!dt || s.Scheduled_date === dt)
     ));
@@ -202,28 +205,32 @@
 
   async function saveSchedule() {
     const data = {
-      Delivery_ID:     document.getElementById('f-delivery').value,
+      Delivery_ID:     parseInt(document.getElementById('f-delivery').value),
       Scheduled_date:  document.getElementById('f-date').value,
       Time_slot:       document.getElementById('f-slot').value,
       Schedule_status: document.getElementById('f-status').value,
     };
     if (!data.Scheduled_date) { showToast('Please select a date', 'error'); return; }
-    if (editingId) {
-      await API.deliverySchedules.update(editingId, data);
-      showToast('Schedule updated!');
-    } else {
-      await API.deliverySchedules.create(data);
-      showToast('Schedule created!');
-    }
-    closeModal('sch-modal');
-    load();
+    try {
+      if (editingId) {
+        await DeliveryScheduleAPI.update(editingId, data);
+        showToast('Schedule updated!');
+      } else {
+        await DeliveryScheduleAPI.create(data);
+        showToast('Schedule created!');
+      }
+      closeModal('sch-modal');
+      load();
+    } catch (error) { showToast('Failed to save: ' + error.message, 'error'); }
   }
 
   async function deleteSchedule(id) {
     if (!confirmAction('Delete this schedule?')) return;
-    await API.deliverySchedules.delete(id);
-    showToast('Schedule deleted', 'warning');
-    load();
+    try {
+      await DeliveryScheduleAPI.delete(id);
+      showToast('Schedule deleted', 'warning');
+      load();
+    } catch (error) { showToast('Failed to delete: ' + error.message, 'error'); }
   }
 
   load();

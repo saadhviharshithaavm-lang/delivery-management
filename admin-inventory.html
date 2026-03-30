@@ -100,6 +100,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   Auth.requireAuth('admin');
   Auth.initSidebarUser();
@@ -111,8 +112,10 @@
   let editingId = null;
 
   async function load() {
-    [allInventory, allProducts] = await Promise.all([API.inventory.getAll(), API.products.getAll()]);
-    renderTable(allInventory);
+    try {
+      [allInventory, allProducts] = await Promise.all([InventoryAPI.getAll(), ProductAPI.getAll()]);
+      renderTable(allInventory);
+    } catch (error) { showToast('Failed to load: ' + error.message, 'error'); }
   }
 
   function getProductName(pid) { return allProducts.find(p => p.Product_ID === pid)?.Product_Name || pid; }
@@ -149,8 +152,8 @@
         <td>${formatDate(i.LastUpdated)}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editInventory('${i.Inventory_ID}')">✏️ Update</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteInventory('${i.Inventory_ID}')">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editInventory(${i.Inventory_ID})">✏️ Update</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteInventory(${i.Inventory_ID})">🗑️</button>
           </div>
         </td>
       </tr>`).join('');
@@ -170,7 +173,7 @@
 
   function buildProductOptions(selectedPid = '') {
     document.getElementById('f-product').innerHTML = allProducts.map(p =>
-      `<option value="${p.Product_ID}" ${p.Product_ID === selectedPid ? 'selected' : ''}>${p.Product_Name}</option>`
+      `<option value="${p.Product_ID}" ${p.Product_ID == selectedPid ? 'selected' : ''}>${p.Product_Name}</option>`
     ).join('');
   }
 
@@ -193,25 +196,29 @@
   }
 
   async function saveInventory() {
-    const pid = document.getElementById('f-product').value;
+    const pid = parseInt(document.getElementById('f-product').value);
     const qty = parseInt(document.getElementById('f-qty').value);
     if (!pid || isNaN(qty) || qty < 0) { showToast('Please enter valid quantity', 'error'); return; }
-    if (editingId) {
-      await API.inventory.update(editingId, { Product_ID: pid, Available_quantity: qty });
-      showToast('Stock updated!');
-    } else {
-      await API.inventory.create({ Product_ID: pid, Available_quantity: qty });
-      showToast('Inventory record added!');
-    }
-    closeModal('inventory-modal');
-    load();
+    try {
+      if (editingId) {
+        await InventoryAPI.update(editingId, { Product_ID: pid, Available_quantity: qty });
+        showToast('Stock updated!');
+      } else {
+        await InventoryAPI.create({ Product_ID: pid, Available_quantity: qty });
+        showToast('Inventory record added!');
+      }
+      closeModal('inventory-modal');
+      load();
+    } catch (error) { showToast('Failed to save: ' + error.message, 'error'); }
   }
 
   async function deleteInventory(id) {
     if (!confirmAction('Remove this inventory record?')) return;
-    await API.inventory.delete(id);
-    showToast('Record removed', 'warning');
-    load();
+    try {
+      await InventoryAPI.delete(id);
+      showToast('Record removed', 'warning');
+      load();
+    } catch (error) { showToast('Failed to delete: ' + error.message, 'error'); }
   }
 
   load();

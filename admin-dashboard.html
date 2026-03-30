@@ -200,6 +200,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const session = Auth.requireAuth('admin');
   if (session) {
@@ -211,94 +212,115 @@
       new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
     async function loadDashboard() {
-      const stats = await API.stats.getAdminStats();
+      try {
+        const [customers, subscriptions, allDeliveries, payments, orders, dpAll] = await Promise.all([
+          CustomerAPI.getAll(), SubscriptionAPI.getAll(), DeliveryAPI.getAll(),
+          PaymentAPI.getAll(), OrderAPI.getAll(), DeliveryPersonAPI.getAll()
+        ]);
 
-      document.getElementById('stat-customers').textContent = stats.totalCustomers;
-      document.getElementById('stat-active-customers').textContent = stats.activeCustomers;
-      document.getElementById('stat-subs').textContent = stats.activeSubscriptions;
-      document.getElementById('stat-deliveries').textContent = stats.todayDeliveries;
-      document.getElementById('stat-pending').textContent = stats.pendingDeliveries;
-      document.getElementById('stat-revenue').textContent = '₹' + stats.totalRevenue.toLocaleString('en-IN');
-      document.getElementById('stat-pending-pay').textContent = '₹' + stats.pendingPayments.toLocaleString('en-IN');
+        // Stats
+        document.getElementById('stat-customers').textContent = customers.length;
+        document.getElementById('stat-active-customers').textContent = customers.filter(c => c.Account_Status === 'Active').length;
+        document.getElementById('stat-subs').textContent = subscriptions.filter(s => s.Status === 'Active').length;
 
-      // Weekly delivery chart
-      const ctx1 = document.getElementById('delivery-chart').getContext('2d');
-      new Chart(ctx1, {
-        type: 'bar',
-        data: {
-          labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
-          datasets: [{
-            label: 'Deliveries',
-            data: stats.weeklyDeliveries,
-            backgroundColor: '#22a066cc',
-            borderColor: '#1a7c4e',
-            borderWidth: 2,
-            borderRadius: 6,
-          }]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            y: { beginAtZero: true, grid: { color: '#f0ece6' }, ticks: { color: '#9c978f' } },
-            x: { grid: { display: false }, ticks: { color: '#9c978f' } }
+        const today = new Date().toISOString().slice(0,10);
+        const todayDels = allDeliveries.filter(d => d.Delivery_date === today);
+        document.getElementById('stat-deliveries').textContent = todayDels.length;
+        document.getElementById('stat-pending').textContent = allDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
+
+        const paidTotal = payments.filter(p => p.Payment_status === 'Paid').reduce((s,p) => s+p.Amount, 0);
+        const pendingTotal = payments.filter(p => p.Payment_status === 'Pending').reduce((s,p) => s+p.Amount, 0);
+        document.getElementById('stat-revenue').textContent = formatCurrency(paidTotal);
+        document.getElementById('stat-pending-pay').textContent = formatCurrency(pendingTotal);
+
+        // Weekly delivery chart — count deliveries per day of week
+        const weeklyData = [0,0,0,0,0,0,0];
+        allDeliveries.forEach(d => {
+          if (d.Delivery_date) {
+            const day = new Date(d.Delivery_date).getDay();
+            const idx = day === 0 ? 6 : day - 1; // Mon=0, Sun=6
+            weeklyData[idx]++;
           }
-        }
-      });
+        });
+        const ctx1 = document.getElementById('delivery-chart').getContext('2d');
+        new Chart(ctx1, {
+          type: 'bar',
+          data: {
+            labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+            datasets: [{
+              label: 'Deliveries',
+              data: weeklyData,
+              backgroundColor: '#22a066cc',
+              borderColor: '#1a7c4e',
+              borderWidth: 2,
+              borderRadius: 6,
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: true, grid: { color: '#f0ece6' }, ticks: { color: '#9c978f' } },
+              x: { grid: { display: false }, ticks: { color: '#9c978f' } }
+            }
+          }
+        });
 
-      // Status donut
-      const allDeliveries = await API.deliveries.getAll();
-      const delivered = allDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
-      const pending   = allDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
-      const failed    = allDeliveries.filter(d => d.Delivery_Status === 'Failed').length;
-      const ctx2 = document.getElementById('status-chart').getContext('2d');
-      new Chart(ctx2, {
-        type: 'doughnut',
-        data: {
-          labels: ['Delivered','Pending','Failed'],
-          datasets: [{
-            data: [delivered, pending, failed],
-            backgroundColor: ['#10b981','#f97316','#ef4444'],
-            borderWidth: 0,
-          }]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          cutout: '70%',
-          plugins: { legend: { display: false } }
-        }
-      });
-      document.getElementById('status-legend').innerHTML = `
-        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.78rem">
-          <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block"></span>Delivered (${delivered})</span>
-          <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#f97316;display:inline-block"></span>Pending (${pending})</span>
-          <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>Failed (${failed})</span>
-        </div>`;
+        // Status donut
+        const delivered = allDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
+        const pending   = allDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
+        const failed    = allDeliveries.filter(d => d.Delivery_Status === 'Failed').length;
+        const ctx2 = document.getElementById('status-chart').getContext('2d');
+        new Chart(ctx2, {
+          type: 'doughnut',
+          data: {
+            labels: ['Delivered','Pending','Failed'],
+            datasets: [{
+              data: [delivered, pending, failed],
+              backgroundColor: ['#10b981','#f97316','#ef4444'],
+              borderWidth: 0,
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            cutout: '70%',
+            plugins: { legend: { display: false } }
+          }
+        });
+        document.getElementById('status-legend').innerHTML = `
+          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.78rem">
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block"></span>Delivered (${delivered})</span>
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#f97316;display:inline-block"></span>Pending (${pending})</span>
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>Failed (${failed})</span>
+          </div>`;
 
-      // Recent orders
-      const [orders, customers] = await Promise.all([API.orders.getAll(), API.customers.getAll()]);
-      const custMap = Object.fromEntries(customers.map(c => [c.Customer_ID, c.Name]));
-      const recentOrders = [...orders].sort((a,b) => b.Order_date.localeCompare(a.Order_date)).slice(0,5);
-      document.getElementById('recent-orders-body').innerHTML = recentOrders.map(o => `
-        <tr>
-          <td><span class="fw-700">${o.Order_ID}</span></td>
-          <td>${custMap[o.Customer_ID] || o.Customer_ID}</td>
-          <td class="fw-700">${formatCurrency(o.Total_amount)}</td>
-          <td>${statusBadge(o.Order_status)}</td>
-        </tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No orders yet</td></tr>';
+        // Recent orders
+        const custMap = Object.fromEntries(customers.map(c => [c.Customer_ID, c.Name]));
+        const recentOrders = [...orders].sort((a,b) => (b.Order_date||'').localeCompare(a.Order_date||'')).slice(0,5);
+        document.getElementById('recent-orders-body').innerHTML = recentOrders.map(o => `
+          <tr>
+            <td><span class="fw-700">${o.Order_ID}</span></td>
+            <td>${custMap[o.Customer_ID] || o.Customer_ID}</td>
+            <td class="fw-700">${formatCurrency(o.Total_amount)}</td>
+            <td>${statusBadge(o.Order_status)}</td>
+          </tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No orders yet</td></tr>';
 
-      // Pending deliveries
-      const pendingDels = allDeliveries.filter(d => d.Delivery_Status === 'Pending').slice(0,5);
-      const dpAll = await API.deliveryPersons.getAll();
-      const dpMap = Object.fromEntries(dpAll.map(d => [d.DeliveryPerson_ID, d.Name]));
-      document.getElementById('pending-deliveries-body').innerHTML = pendingDels.map(d => `
-        <tr>
-          <td class="fw-700">${d.Delivery_ID}</td>
-          <td>${d.Order_ID}</td>
-          <td>${formatDate(d.Delivery_date)}</td>
-          <td>${statusBadge(d.Delivery_Status)}</td>
-          <td>${dpMap[d.DeliveryPerson_ID] || d.DeliveryPerson_ID}</td>
-        </tr>`).join('') || '<tr><td colspan="5" class="text-center text-muted" style="padding:24px">No pending deliveries</td></tr>';
+        // Pending deliveries
+        const pendingDels = allDeliveries.filter(d => d.Delivery_Status === 'Pending').slice(0,5);
+        const dpMap = Object.fromEntries(dpAll.map(d => [d.DeliveryPerson_ID, d.Name]));
+        document.getElementById('pending-deliveries-body').innerHTML = pendingDels.map(d => `
+          <tr>
+            <td class="fw-700">${d.Delivery_ID}</td>
+            <td>${d.Order_ID}</td>
+            <td>${formatDate(d.Delivery_date)}</td>
+            <td>${statusBadge(d.Delivery_Status)}</td>
+            <td>${dpMap[d.DeliveryPerson_ID] || d.DeliveryPerson_ID}</td>
+          </tr>`).join('') || '<tr><td colspan="5" class="text-center text-muted" style="padding:24px">No pending deliveries</td></tr>';
+
+      } catch (error) {
+        console.error('Dashboard load error:', error);
+        showToast('Failed to load dashboard: ' + error.message, 'error');
+      }
     }
     loadDashboard();
   }

@@ -111,6 +111,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   Auth.requireAuth('admin');
   Auth.initSidebarUser();
@@ -122,14 +123,16 @@
   let markingId = null;
 
   async function load() {
-    allPayments = await API.payments.getAll();
-    const paid    = allPayments.filter(p => p.Payment_status === 'Paid');
-    const pending = allPayments.filter(p => p.Payment_status === 'Pending');
-    document.getElementById('p-collected').textContent = formatCurrency(paid.reduce((s,p) => s+p.Amount, 0));
-    document.getElementById('p-pending').textContent   = formatCurrency(pending.reduce((s,p) => s+p.Amount, 0));
-    document.getElementById('p-upi').textContent  = allPayments.filter(p => p.Payment_method === 'UPI').length;
-    document.getElementById('p-cash').textContent = allPayments.filter(p => p.Payment_method === 'Cash').length;
-    renderTable(allPayments);
+    try {
+      allPayments = await PaymentAPI.getAll();
+      const paid    = allPayments.filter(p => p.Payment_status === 'Paid');
+      const pending = allPayments.filter(p => p.Payment_status === 'Pending');
+      document.getElementById('p-collected').textContent = formatCurrency(paid.reduce((s,p) => s+p.Amount, 0));
+      document.getElementById('p-pending').textContent   = formatCurrency(pending.reduce((s,p) => s+p.Amount, 0));
+      document.getElementById('p-upi').textContent  = allPayments.filter(p => p.Payment_method === 'UPI').length;
+      document.getElementById('p-cash').textContent = allPayments.filter(p => p.Payment_method === 'Cash').length;
+      renderTable(allPayments);
+    } catch (error) { showToast('Failed to load: ' + error.message, 'error'); }
   }
 
   function methodBadge(m) {
@@ -153,7 +156,7 @@
         <td>${p.Payment_Date ? formatDate(p.Payment_Date) : '<span class="td-muted">Not paid</span>'}</td>
         <td>
           ${p.Payment_status === 'Pending'
-            ? `<button class="btn btn-primary btn-xs" onclick="openMarkPaid('${p.Payment_ID}')">✅ Mark Paid</button>`
+            ? `<button class="btn btn-primary btn-xs" onclick="openMarkPaid(${p.Payment_ID})">✅ Mark Paid</button>`
             : '<span class="td-muted">Paid</span>'}
         </td>
       </tr>`).join('');
@@ -164,7 +167,7 @@
     const st = document.getElementById('status-filter').value;
     const mt = document.getElementById('method-filter').value;
     renderTable(allPayments.filter(p =>
-      (!q || p.Payment_ID.toLowerCase().includes(q) || p.Order_ID.toLowerCase().includes(q)) &&
+      (!q || String(p.Payment_ID).includes(q) || String(p.Order_ID).includes(q)) &&
       (!st || p.Payment_status === st) &&
       (!mt || p.Payment_method === mt)
     ));
@@ -179,10 +182,13 @@
 
   async function markPaid() {
     const method = document.getElementById('f-method').value;
-    await API.payments.markPaid(markingId, method);
-    showToast('Payment marked as paid!');
-    closeModal('pay-modal');
-    load();
+    const today = new Date().toISOString().slice(0,10);
+    try {
+      await PaymentAPI.update(markingId, { Payment_status: 'Paid', Payment_method: method, Payment_Date: today });
+      showToast('Payment marked as paid!');
+      closeModal('pay-modal');
+      load();
+    } catch (error) { showToast('Failed to update: ' + error.message, 'error'); }
   }
 
   load();
