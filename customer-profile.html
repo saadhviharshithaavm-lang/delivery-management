@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Profile — FreshDeliver</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">P</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Customer</div><div class="user-role" id="sidebar-user-role">Customer</div></div>
+    </div>
+    <nav class="sidebar-nav" id="customer-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">My Profile</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">My Profile</div>
+          <div class="page-subtitle">View and update your personal information</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:24px;max-width:900px">
+        <!-- Avatar Card -->
+        <div class="card" style="text-align:center;padding:32px 20px">
+          <div style="width:80px;height:80px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:white;margin:0 auto 16px;font-family:'Outfit',sans-serif" id="avatar-circle">P</div>
+          <div style="font-weight:700;font-size:1.1rem;margin-bottom:4px" id="p-name-display">—</div>
+          <div id="p-status-display" style="margin-bottom:16px"></div>
+          <div style="font-size:.82rem;color:var(--text-muted)" id="p-id-display">—</div>
+        </div>
+
+        <!-- Info Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Personal Information</span>
+            <button class="btn btn-primary btn-sm" onclick="toggleEdit()" id="edit-btn">✏️ Edit Profile</button>
+          </div>
+          <div class="card-body">
+            <!-- View Mode -->
+            <div id="view-mode">
+              <div class="info-row" style="margin-bottom:20px">
+                <div class="info-item"><div class="info-label">Full Name</div><div class="info-value" id="v-name">—</div></div>
+                <div class="info-item"><div class="info-label">Phone Number</div><div class="info-value" id="v-phone">—</div></div>
+              </div>
+              <div class="info-row" style="margin-bottom:20px">
+                <div class="info-item"><div class="info-label">Area</div><div class="info-value" id="v-area">—</div></div>
+                <div class="info-item"><div class="info-label">Account Status</div><div class="info-value" id="v-status">—</div></div>
+              </div>
+              <div class="info-item"><div class="info-label">Address</div><div class="info-value" id="v-address" style="margin-top:4px">—</div></div>
+            </div>
+
+            <!-- Edit Mode -->
+            <div id="edit-mode" style="display:none">
+              <div class="form-grid form-grid-2">
+                <div class="form-group">
+                  <label>Full Name *</label>
+                  <input type="text" id="f-name" class="form-control" />
+                </div>
+                <div class="form-group">
+                  <label>Phone Number *</label>
+                  <input type="text" id="f-phone" class="form-control" />
+                </div>
+                <div class="form-group">
+                  <label>Area *</label>
+                  <input type="text" id="f-area" class="form-control" />
+                </div>
+                <div class="form-group full">
+                  <label>Address *</label>
+                  <input type="text" id="f-address" class="form-control" />
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:20px">
+                <button class="btn btn-primary" onclick="saveProfile()">💾 Save Changes</button>
+                <button class="btn btn-secondary" onclick="toggleEdit()">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/customer.js"></script>
+<script>
+  const session = Auth.requireAuth('customer');
+  let customer = null;
+
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildCustomerSidebar('customer-profile.html');
+
+    async function load() {
+      customer = await API.customers.getById(session.id);
+      if (!customer) return;
+      const init = customer.Name.charAt(0).toUpperCase();
+      document.getElementById('avatar-circle').textContent    = init;
+      document.getElementById('p-name-display').textContent   = customer.Name;
+      document.getElementById('p-id-display').textContent     = `ID: ${customer.Customer_ID}`;
+      document.getElementById('p-status-display').innerHTML   = statusBadge(customer.Account_Status);
+      document.getElementById('v-name').textContent    = customer.Name;
+      document.getElementById('v-phone').textContent   = customer.Phone_Num;
+      document.getElementById('v-area').textContent    = customer.Area;
+      document.getElementById('v-status').innerHTML    = statusBadge(customer.Account_Status);
+      document.getElementById('v-address').textContent = customer.Address;
+      document.getElementById('f-name').value    = customer.Name;
+      document.getElementById('f-phone').value   = customer.Phone_Num;
+      document.getElementById('f-area').value    = customer.Area;
+      document.getElementById('f-address').value = customer.Address;
+    }
+
+    function toggleEdit() {
+      const editMode = document.getElementById('edit-mode');
+      const viewMode = document.getElementById('view-mode');
+      const btn = document.getElementById('edit-btn');
+      const isEditing = editMode.style.display !== 'none';
+      editMode.style.display = isEditing ? 'none' : 'block';
+      viewMode.style.display = isEditing ? 'block' : 'none';
+      btn.textContent = isEditing ? '✏️ Edit Profile' : 'Cancel';
+    }
+
+    async function saveProfile() {
+      const name    = document.getElementById('f-name').value.trim();
+      const phone   = document.getElementById('f-phone').value.trim();
+      const area    = document.getElementById('f-area').value.trim();
+      const address = document.getElementById('f-address').value.trim();
+      if (!name || !phone || !area || !address) { showToast('Please fill all fields', 'error'); return; }
+      await API.customers.update(session.id, { Name: name, Phone_Num: phone, Area: area, Address: address });
+      showToast('Profile updated successfully!');
+      toggleEdit();
+      load();
+    }
+
+    window.toggleEdit = toggleEdit;
+    window.saveProfile = saveProfile;
+    load();
+  }
+</script>
+</body>
+</html>

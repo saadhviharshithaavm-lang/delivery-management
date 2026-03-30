@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payments — FreshDeliver Admin</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">A</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Admin</div><div class="user-role" id="sidebar-user-role">Administrator</div></div>
+    </div>
+    <nav class="sidebar-nav" id="admin-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Payment Records</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Payments</div>
+          <div class="page-subtitle">All transaction records and payment statuses</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+        <div class="stat-card" style="--card-accent:var(--success)"><div class="stat-header"><span class="stat-label">Total Collected</span><div class="stat-icon">💰</div></div><div class="stat-value" id="p-collected">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--warning)"><div class="stat-header"><span class="stat-label">Pending Amount</span><div class="stat-icon">⏳</div></div><div class="stat-value" id="p-pending">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--info)"><div class="stat-header"><span class="stat-label">UPI Payments</span><div class="stat-icon">📱</div></div><div class="stat-value" id="p-upi">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--primary)"><div class="stat-header"><span class="stat-label">Cash Payments</span><div class="stat-icon">💵</div></div><div class="stat-value" id="p-cash">—</div></div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search payment ID or order…" oninput="filterTable()" />
+          </div>
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Status</option>
+            <option value="Paid">Paid</option>
+            <option value="Pending">Pending</option>
+          </select>
+          <select class="filter-select" id="method-filter" onchange="filterTable()">
+            <option value="">All Methods</option>
+            <option value="UPI">UPI</option>
+            <option value="Card">Card</option>
+            <option value="Cash">Cash</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Payment ID</th>
+                <th>Order ID</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Status</th>
+                <th>Payment Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="payments-body">
+              <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Mark Paid Modal -->
+<div class="modal-overlay" id="pay-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Mark as Paid</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Payment Method</label>
+        <select id="f-method" class="form-control">
+          <option value="UPI">UPI</option>
+          <option value="Card">Card</option>
+          <option value="Cash">Cash</option>
+        </select>
+      </div>
+      <p style="margin-top:12px;font-size:.85rem">Mark Payment ID: <strong id="pay-id-display">-</strong> as paid today.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('pay-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="markPaid()">✅ Confirm Payment</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  Auth.requireAuth('admin');
+  Auth.initSidebarUser();
+  Auth.initMobileSidebar();
+  buildAdminSidebar('admin-payments.html');
+  initModalClosers();
+
+  let allPayments = [];
+  let markingId = null;
+
+  async function load() {
+    allPayments = await API.payments.getAll();
+    const paid    = allPayments.filter(p => p.Payment_status === 'Paid');
+    const pending = allPayments.filter(p => p.Payment_status === 'Pending');
+    document.getElementById('p-collected').textContent = formatCurrency(paid.reduce((s,p) => s+p.Amount, 0));
+    document.getElementById('p-pending').textContent   = formatCurrency(pending.reduce((s,p) => s+p.Amount, 0));
+    document.getElementById('p-upi').textContent  = allPayments.filter(p => p.Payment_method === 'UPI').length;
+    document.getElementById('p-cash').textContent = allPayments.filter(p => p.Payment_method === 'Cash').length;
+    renderTable(allPayments);
+  }
+
+  function methodBadge(m) {
+    const map = { UPI: 'badge-info', Card: 'badge-accent', Cash: 'badge-muted' };
+    return `<span class="badge ${map[m]||'badge-muted'}">${m||'N/A'}</span>`;
+  }
+
+  function renderTable(data) {
+    const body = document.getElementById('payments-body');
+    if (!data.length) {
+      body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">💳</div><div class="empty-title">No payments found</div></div></td></tr>';
+      return;
+    }
+    body.innerHTML = data.map(p => `
+      <tr>
+        <td class="fw-700">${p.Payment_ID}</td>
+        <td>${p.Order_ID}</td>
+        <td class="fw-700" style="color:var(--primary)">${formatCurrency(p.Amount)}</td>
+        <td>${methodBadge(p.Payment_method)}</td>
+        <td>${statusBadge(p.Payment_status)}</td>
+        <td>${p.Payment_Date ? formatDate(p.Payment_Date) : '<span class="td-muted">Not paid</span>'}</td>
+        <td>
+          ${p.Payment_status === 'Pending'
+            ? `<button class="btn btn-primary btn-xs" onclick="openMarkPaid('${p.Payment_ID}')">✅ Mark Paid</button>`
+            : '<span class="td-muted">Paid</span>'}
+        </td>
+      </tr>`).join('');
+  }
+
+  function filterTable() {
+    const q  = document.getElementById('search-input').value.toLowerCase();
+    const st = document.getElementById('status-filter').value;
+    const mt = document.getElementById('method-filter').value;
+    renderTable(allPayments.filter(p =>
+      (!q || p.Payment_ID.toLowerCase().includes(q) || p.Order_ID.toLowerCase().includes(q)) &&
+      (!st || p.Payment_status === st) &&
+      (!mt || p.Payment_method === mt)
+    ));
+  }
+
+  function openMarkPaid(id) {
+    markingId = id;
+    document.getElementById('pay-id-display').textContent = id;
+    document.getElementById('f-method').value = 'UPI';
+    openModal('pay-modal');
+  }
+
+  async function markPaid() {
+    const method = document.getElementById('f-method').value;
+    await API.payments.markPaid(markingId, method);
+    showToast('Payment marked as paid!');
+    closeModal('pay-modal');
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

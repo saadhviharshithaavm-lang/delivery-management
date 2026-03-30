@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Suppliers — FreshDeliver Admin</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">A</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Admin</div><div class="user-role" id="sidebar-user-role">Administrator</div></div>
+    </div>
+    <nav class="sidebar-nav" id="admin-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Supplier Management</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Suppliers</div>
+          <div class="page-subtitle">Manage suppliers and their product associations</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="openAddModal()">➕ Add Supplier</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
+        <div class="stat-card" style="--card-accent:var(--primary)">
+          <div class="stat-header"><span class="stat-label">Total Suppliers</span><div class="stat-icon">🏭</div></div>
+          <div class="stat-value" id="stat-total">—</div>
+        </div>
+        <div class="stat-card" style="--card-accent:var(--accent)">
+          <div class="stat-header"><span class="stat-label">Products Supplied</span><div class="stat-icon">🛒</div></div>
+          <div class="stat-value" id="stat-products">—</div>
+        </div>
+        <div class="stat-card" style="--card-accent:var(--info)">
+          <div class="stat-header"><span class="stat-label">Active Subscriptions</span><div class="stat-icon">🔄</div></div>
+          <div class="stat-value" id="stat-subs">—</div>
+        </div>
+      </div>
+
+      <!-- Suppliers Table -->
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search supplier name or phone…" oninput="filterTable()" />
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Supplier ID</th>
+                <th>Supplier Name</th>
+                <th>Phone</th>
+                <th>Products Supplied</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="suppliers-body">
+              <tr><td colspan="5" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="supplier-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Add Supplier</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Supplier Name *</label>
+          <input type="text" id="f-name" class="form-control" placeholder="e.g. Nandini Dairy Farm" />
+        </div>
+        <div class="form-group">
+          <label>Phone Number *</label>
+          <input type="text" id="f-phone" class="form-control" placeholder="10-digit number" />
+        </div>
+      </div>
+      <div style="margin-top:18px">
+        <label style="display:block;margin-bottom:8px;font-size:.82rem;font-weight:600;color:var(--text-secondary)">Supplied Products</label>
+        <div id="product-checkboxes" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:200px;overflow-y:auto;padding:4px"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('supplier-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSupplier()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  Auth.requireAuth('admin');
+  Auth.initSidebarUser();
+  Auth.initMobileSidebar();
+  buildAdminSidebar('admin-suppliers.html');
+  initModalClosers();
+
+  let allSuppliers = [], allProducts = [], supplierProducts = [], allSubs = [];
+  let editingId = null;
+
+  async function load() {
+    [allSuppliers, allProducts, supplierProducts, allSubs] = await Promise.all([
+      API.suppliers.getAll(), API.products.getAll(),
+      API.supplierProducts.getAll(), API.subscriptions.getAll()
+    ]);
+    document.getElementById('stat-total').textContent = allSuppliers.length;
+    document.getElementById('stat-products').textContent = new Set(supplierProducts.map(sp => sp.Product_ID)).size;
+    document.getElementById('stat-subs').textContent = allSubs.filter(s => s.Status === 'Active').length;
+    renderTable(allSuppliers);
+  }
+
+  function getSupplierProducts(sid) {
+    return supplierProducts.filter(sp => sp.Supplier_ID === sid).map(sp => allProducts.find(p => p.Product_ID === sp.Product_ID)?.Product_Name).filter(Boolean);
+  }
+
+  function renderTable(data) {
+    const body = document.getElementById('suppliers-body');
+    if (!data.length) {
+      body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🏭</div><div class="empty-title">No suppliers found</div></div></td></tr>';
+      return;
+    }
+    body.innerHTML = data.map(s => {
+      const prods = getSupplierProducts(s.Supplier_ID);
+      return `<tr>
+        <td class="td-muted">${s.Supplier_ID}</td>
+        <td><strong>${s.Supplier_Name}</strong></td>
+        <td>${s.Phone_Num}</td>
+        <td>${prods.map(p => `<span class="badge badge-primary" style="margin:2px">${p}</span>`).join('') || '<span class="td-muted">None</span>'}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-xs" onclick="editSupplier('${s.Supplier_ID}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteSupplier('${s.Supplier_ID}')">🗑️</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filterTable() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    renderTable(allSuppliers.filter(s => !q || s.Supplier_Name.toLowerCase().includes(q) || s.Phone_Num.includes(q)));
+  }
+
+  function buildProductCheckboxes(selectedPids = []) {
+    document.getElementById('product-checkboxes').innerHTML = allProducts.map(p => `
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:.83rem">
+        <input type="checkbox" value="${p.Product_ID}" ${selectedPids.includes(p.Product_ID)?'checked':''} />
+        ${p.Product_Name}
+      </label>`).join('');
+  }
+
+  function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Supplier';
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-phone').value = '';
+    buildProductCheckboxes();
+    openModal('supplier-modal');
+  }
+
+  function editSupplier(id) {
+    const s = allSuppliers.find(x => x.Supplier_ID === id);
+    if (!s) return;
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit Supplier';
+    document.getElementById('f-name').value  = s.Supplier_Name;
+    document.getElementById('f-phone').value = s.Phone_Num;
+    const selected = supplierProducts.filter(sp => sp.Supplier_ID === id).map(sp => sp.Product_ID);
+    buildProductCheckboxes(selected);
+    openModal('supplier-modal');
+  }
+
+  async function saveSupplier() {
+    const name  = document.getElementById('f-name').value.trim();
+    const phone = document.getElementById('f-phone').value.trim();
+    if (!name || !phone) { showToast('Please fill all required fields', 'error'); return; }
+    const selectedPids = [...document.querySelectorAll('#product-checkboxes input:checked')].map(cb => cb.value);
+
+    if (editingId) {
+      await API.suppliers.update(editingId, { Supplier_Name: name, Phone_Num: phone });
+      // rebuild supplier_products
+      const existing = supplierProducts.filter(sp => sp.Supplier_ID === editingId).map(sp => sp.Product_ID);
+      for (const pid of existing) if (!selectedPids.includes(pid)) await API.supplierProducts.delete(editingId, pid);
+      for (const pid of selectedPids) if (!existing.includes(pid)) await API.supplierProducts.create({ Supplier_ID: editingId, Product_ID: pid });
+      showToast('Supplier updated!');
+    } else {
+      const s = await API.suppliers.create({ Supplier_Name: name, Phone_Num: phone });
+      for (const pid of selectedPids) await API.supplierProducts.create({ Supplier_ID: s.Supplier_ID, Product_ID: pid });
+      showToast('Supplier added!');
+    }
+    closeModal('supplier-modal');
+    load();
+  }
+
+  async function deleteSupplier(id) {
+    if (!confirmAction('Delete this supplier?')) return;
+    await API.suppliers.delete(id);
+    showToast('Supplier deleted', 'warning');
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

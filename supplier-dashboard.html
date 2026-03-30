@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Supplier Portal — FreshDeliver</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🏭</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">S</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Supplier</div><div class="user-role" id="sidebar-user-role">Supplier</div></div>
+    </div>
+    <nav class="sidebar-nav" id="supplier-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Supplier Dashboard</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <!-- Welcome Banner -->
+      <div style="background:linear-gradient(120deg,#1e6b47 0%,#2d9d6e 100%);border-radius:var(--radius-lg);padding:24px 28px;color:white;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+        <div>
+          <h2 style="font-size:1.35rem;margin-bottom:4px">Welcome, <span id="supp-name">Supplier</span>! 🏭</h2>
+          <p style="opacity:.85;font-size:.875rem">Here's an overview of your orders and products.</p>
+        </div>
+        <div style="font-size:52px">🥛</div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="margin-bottom:24px">
+        <div class="stat-card" style="--card-accent:var(--primary)"><div class="stat-header"><span class="stat-label">Products Supplied</span><div class="stat-icon">📦</div></div><div class="stat-value" id="s-products">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--info)"><div class="stat-header"><span class="stat-label">Active Subscriptions</span><div class="stat-icon">🔄</div></div><div class="stat-value" id="s-subs">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--warning)"><div class="stat-header"><span class="stat-label">Pending Orders</span><div class="stat-icon">⏳</div></div><div class="stat-value" id="s-pending">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--success)"><div class="stat-header"><span class="stat-label">Fulfilled Orders</span><div class="stat-icon">✅</div></div><div class="stat-value" id="s-fulfilled">—</div></div>
+      </div>
+
+      <!-- My Products -->
+      <div class="card" style="margin-bottom:24px">
+        <div class="card-header"><span class="card-title">📦 My Products</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Product</th><th>Unit</th><th>Price</th><th>Current Stock</th></tr></thead>
+            <tbody id="my-products-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Orders for My Products -->
+      <div class="card" style="margin-bottom:24px">
+        <div class="card-header"><span class="card-title">📋 Orders for My Products</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Order ID</th><th>Product</th><th>Quantity</th><th>Order Date</th><th>Status</th></tr></thead>
+            <tbody id="my-orders-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Active Subscriptions for My Products -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">🔄 Subscriptions Tied to You</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Subscription ID</th><th>Customer ID</th><th>Product</th><th>Qty/Day</th><th>Frequency</th><th>Status</th></tr></thead>
+            <tbody id="my-subs-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  const SUPPLIER_NAV = [
+    { section: 'Portal', items: [
+      { icon: '🏠', label: 'Dashboard',    href: 'supplier-dashboard.html' },
+      { icon: '📦', label: 'My Products',  href: 'supplier-products.html'  },
+      { icon: '📋', label: 'Orders',       href: 'supplier-orders.html'    },
+    ]}
+  ];
+
+  function buildSupplierSidebar(activePage) {
+    const nav = document.getElementById('supplier-nav');
+    if (!nav) return;
+    nav.innerHTML = SUPPLIER_NAV.map(section => `
+      <div class="nav-section">
+        <div class="nav-section-label">${section.section}</div>
+        ${section.items.map(item => `
+          <a href="${item.href}" class="nav-item ${item.href === activePage ? 'active' : ''}">
+            <span class="nav-icon">${item.icon}</span>
+            <span>${item.label}</span>
+          </a>`).join('')}
+      </div>`).join('');
+  }
+
+  const session = Auth.requireAuth('supplier');
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildSupplierSidebar('supplier-dashboard.html');
+    document.getElementById('supp-name').textContent = session.name;
+
+    async function load() {
+      const [allProducts, allSuppliers, allInventory, allSubs, allSubDetails, allOrders, allOrderItems] = await Promise.all([
+        API.products.getAll(), API.suppliers.getAll(), API.inventory.getAll(),
+        API.subscriptions.getAll(), API.subscriptionDetails.getAll(),
+        API.orders.getAll(), API.orderItems.getAll()
+      ]);
+
+      const mySupplier   = allSuppliers.find(s => s.Supplier_ID === session.id);
+      const myProductIDs = allProducts.filter(p => p.Supplier_ID === session.id).map(p => p.Product_ID);
+      const myProducts   = allProducts.filter(p => p.Supplier_ID === session.id);
+
+      // Stats
+      const mySubs = allSubs.filter(s => s.Supplier_ID === session.id);
+      const myOrderItems = allOrderItems.filter(i => myProductIDs.includes(i.Product_ID));
+      const myOrderIDs   = [...new Set(myOrderItems.map(i => i.Order_ID))];
+      const myOrders     = allOrders.filter(o => myOrderIDs.includes(o.Order_ID));
+
+      document.getElementById('s-products').textContent  = myProducts.length;
+      document.getElementById('s-subs').textContent      = mySubs.filter(s => s.Status === 'Active').length;
+      document.getElementById('s-pending').textContent   = myOrders.filter(o => o.Order_status === 'Pending').length;
+      document.getElementById('s-fulfilled').textContent = myOrders.filter(o => o.Order_status === 'Delivered').length;
+
+      // Products table
+      const prodBody = document.getElementById('my-products-body');
+      const invMap = Object.fromEntries(allInventory.map(i => [i.Product_ID, i.Available_quantity]));
+      prodBody.innerHTML = myProducts.length
+        ? myProducts.map(p => `<tr>
+            <td><strong>${p.Product_Name}</strong></td>
+            <td>${p.Unit}</td>
+            <td class="fw-700" style="color:var(--primary)">${formatCurrency(p.Price)}</td>
+            <td>
+              <span class="fw-700">${invMap[p.Product_ID] ?? '—'}</span>
+              ${(invMap[p.Product_ID] ?? 999) < 50
+                ? '<span class="badge badge-warning" style="margin-left:6px">Low Stock</span>'
+                : '<span class="badge badge-success" style="margin-left:6px">OK</span>'}
+            </td>
+          </tr>`).join('')
+        : '<tr><td colspan="4" class="text-center text-muted" style="padding:20px">No products assigned yet</td></tr>';
+
+      // Orders table
+      const orderBody = document.getElementById('my-orders-body');
+      const prodMap = Object.fromEntries(allProducts.map(p => [p.Product_ID, p.Product_Name]));
+      const myRelevantItems = myOrderItems.slice(0, 15);
+      orderBody.innerHTML = myRelevantItems.length
+        ? myRelevantItems.map(i => {
+            const o = allOrders.find(x => x.Order_ID === i.Order_ID);
+            return `<tr>
+              <td class="fw-700">${i.Order_ID}</td>
+              <td>${prodMap[i.Product_ID] || i.Product_ID}</td>
+              <td>${i.Quantity}</td>
+              <td>${o ? formatDate(o.Order_date) : '—'}</td>
+              <td>${o ? statusBadge(o.Order_status) : '—'}</td>
+            </tr>`;
+          }).join('')
+        : '<tr><td colspan="5" class="text-center text-muted" style="padding:20px">No orders yet</td></tr>';
+
+      // Subscriptions table
+      const subBody = document.getElementById('my-subs-body');
+      const mySubDetails = allSubDetails.filter(d => myProductIDs.includes(d.Product_ID));
+      subBody.innerHTML = mySubDetails.length
+        ? mySubDetails.map(d => {
+            const sub = allSubs.find(s => s.Subscription_ID === d.Subscription_ID);
+            return `<tr>
+              <td>${d.Subscription_ID}</td>
+              <td>${sub?.Customer_ID || '—'}</td>
+              <td>${prodMap[d.Product_ID] || d.Product_ID}</td>
+              <td>${d.Quantity_Per_Day}</td>
+              <td><span class="badge badge-muted">${d.Delivery_Frequency}</span></td>
+              <td>${sub ? statusBadge(sub.Status) : '—'}</td>
+            </tr>`;
+          }).join('')
+        : '<tr><td colspan="6" class="text-center text-muted" style="padding:20px">No subscriptions</td></tr>';
+    }
+
+    load();
+  }
+</script>
+</body>
+</html>

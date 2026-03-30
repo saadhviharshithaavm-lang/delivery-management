@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Login Debug</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+    h1 { color: #333; }
+    .section { margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 5px; }
+    .pass { background: #d4edda; border-left: 4px solid #28a745; }
+    .fail { background: #f8d7da; border-left: 4px solid #dc3545; }
+    pre { background: white; padding: 10px; border: 1px solid #ddd; overflow-x: auto; }
+    button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+    button:hover { background: #0056b3; }
+  </style>
+</head>
+<body>
+  <h1>🔍 FreshDeliver Login Debug Tool</h1>
+
+  <div id="status"></div>
+  <div id="tests"></div>
+
+  <h2>Manual Test</h2>
+  <button onclick="testAdmin()">Test Admin Login</button>
+  <button onclick="testCustomer()">Test Customer Login</button>
+  <button onclick="testSupplier()">Test Supplier Login</button>
+  <button onclick="testDelivery()">Test Delivery Login</button>
+  <button onclick="clearAll()">Clear Storage & Reload</button>
+
+  <div id="results"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+
+  <script>
+    const statusDiv = document.getElementById('status');
+    const testsDiv = document.getElementById('tests');
+    const resultsDiv = document.getElementById('results');
+
+    function addStatus(msg, type = 'info') {
+      const div = document.createElement('div');
+      div.className = 'section ' + (type === 'pass' ? 'pass' : type === 'fail' ? 'fail' : '');
+      div.innerHTML = msg;
+      statusDiv.appendChild(div);
+    }
+
+    function addResult(msg) {
+      resultsDiv.innerHTML += '<div class="section">' + msg + '</div>';
+    }
+
+    // Initial checks
+    addStatus('✓ Page loaded successfully', 'pass');
+
+    if (typeof API === 'undefined') {
+      addStatus('✗ API object NOT found - api.js did not load!', 'fail');
+    } else {
+      addStatus('✓ API object loaded successfully', 'pass');
+    }
+
+    if (typeof Auth === 'undefined') {
+      addStatus('✗ Auth object NOT found - auth.js did not load!', 'fail');
+    } else {
+      addStatus('✓ Auth object loaded successfully', 'pass');
+      addStatus('Auth methods: ' + Object.keys(Auth).join(', '));
+    }
+
+    // Storage check
+    try {
+      localStorage.setItem('test', 'test');
+      localStorage.removeItem('test');
+      addStatus('✓ localStorage is available', 'pass');
+    } catch (e) {
+      addStatus('✗ localStorage is NOT available: ' + e.message, 'fail');
+    }
+
+    try {
+      sessionStorage.setItem('test', 'test');
+      sessionStorage.removeItem('test');
+      addStatus('✓ sessionStorage is available', 'pass');
+    } catch (e) {
+      addStatus('✗ sessionStorage is NOT available: ' + e.message, 'fail');
+    }
+
+    // Test functions
+    function testLogin(username, password, roleName) {
+      resultsDiv.innerHTML = '';
+      addResult('<h3>Testing ' + roleName + ' Login</h3>');
+      addResult('Username: <code>' + username + '</code><br>Password: <code>' + password + '</code>');
+
+      try {
+        const result = Auth.login(username, password);
+        addResult('<pre>' + JSON.stringify(result, null, 2) + '</pre>');
+
+        if (result.success) {
+          addResult('<div class="section pass"><strong>✓ LOGIN SUCCESSFUL!</strong></div>');
+          const session = Auth.getSession();
+          addResult('<strong>Session Data:</strong><pre>' + JSON.stringify(session, null, 2) + '</pre>');
+          addResult('<p>You should now be able to navigate to the dashboard.</p>');
+        } else {
+          addResult('<div class="section fail"><strong>✗ LOGIN FAILED</strong><br>Error: ' + result.error + '</div>');
+        }
+      } catch (e) {
+        addResult('<div class="section fail"><strong>✗ EXCEPTION</strong><br>' + e.message + '<pre>' + e.stack + '</pre></div>');
+      }
+    }
+
+    function testAdmin() { testLogin('admin', 'admin123', 'Admin'); }
+    function testCustomer() { testLogin('priya', 'pass123', 'Customer'); }
+    function testSupplier() { testLogin('nandini', 'supp123', 'Supplier'); }
+    function testDelivery() { testLogin('raju', 'del123', 'Delivery'); }
+
+    function clearAll() {
+      localStorage.clear();
+      sessionStorage.clear();
+      alert('Storage cleared! Page will reload.');
+      location.reload();
+    }
+
+    // Check for existing session
+    if (typeof Auth !== 'undefined') {
+      const currentSession = Auth.getSession();
+      if (currentSession) {
+        addStatus('ℹ️ You are currently logged in as: ' + currentSession.name + ' (' + currentSession.role + ')');
+      } else {
+        addStatus('ℹ️ No active session found');
+      }
+    }
+  </script>
+</body>
+</html>

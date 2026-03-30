@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payments — FreshDeliver</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">P</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Customer</div><div class="user-role" id="sidebar-user-role">Customer</div></div>
+    </div>
+    <nav class="sidebar-nav" id="customer-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Payments</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Payments</div>
+          <div class="page-subtitle">Your billing history and pending dues</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
+        <div class="stat-card" style="--card-accent:var(--success)"><div class="stat-header"><span class="stat-label">Total Paid</span><div class="stat-icon">✅</div></div><div class="stat-value" id="p-paid">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--warning)"><div class="stat-header"><span class="stat-label">Pending Amount</span><div class="stat-icon">⏳</div></div><div class="stat-value" id="p-pending">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--info)"><div class="stat-header"><span class="stat-label">Total Transactions</span><div class="stat-icon">📄</div></div><div class="stat-value" id="p-total">—</div></div>
+      </div>
+
+      <!-- Pending Dues -->
+      <div class="card" style="margin-bottom:24px" id="pending-card">
+        <div class="card-header">
+          <span class="card-title">⚠️ Pending Dues</span>
+          <span class="badge badge-warning" id="pending-count">0 pending</span>
+        </div>
+        <div id="pending-dues-content" style="padding:16px 20px"></div>
+      </div>
+
+      <!-- All Payments -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">📄 Payment History</span>
+        </div>
+        <div class="table-toolbar" style="padding:12px 20px;border-top:none">
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Status</option>
+            <option value="Paid">Paid</option>
+            <option value="Pending">Pending</option>
+          </select>
+          <select class="filter-select" id="method-filter" onchange="filterTable()">
+            <option value="">All Methods</option>
+            <option value="UPI">UPI</option>
+            <option value="Card">Card</option>
+            <option value="Cash">Cash</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Payment ID</th>
+                <th>Order ID</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Status</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody id="payments-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Make Payment Modal -->
+<div class="modal-overlay" id="pay-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Make Payment</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--primary-bg);border-radius:var(--radius);padding:16px;text-align:center;margin-bottom:20px">
+        <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:4px">Amount Due</div>
+        <div style="font-family:'Outfit',sans-serif;font-size:2rem;font-weight:800;color:var(--primary)" id="pay-amount">₹0</div>
+        <div style="font-size:.8rem;color:var(--text-muted)" id="pay-order-label">Order: —</div>
+      </div>
+      <div class="form-group">
+        <label>Payment Method</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:4px">
+          <label class="method-opt" style="padding:12px;border:2px solid var(--border);border-radius:var(--radius);text-align:center;cursor:pointer;transition:var(--transition)" onclick="selectMethod('UPI', this)">
+            <div style="font-size:24px">📱</div>
+            <div style="font-size:.8rem;font-weight:600;margin-top:4px">UPI</div>
+          </label>
+          <label class="method-opt" style="padding:12px;border:2px solid var(--border);border-radius:var(--radius);text-align:center;cursor:pointer;transition:var(--transition)" onclick="selectMethod('Card', this)">
+            <div style="font-size:24px">💳</div>
+            <div style="font-size:.8rem;font-weight:600;margin-top:4px">Card</div>
+          </label>
+          <label class="method-opt" style="padding:12px;border:2px solid var(--border);border-radius:var(--radius);text-align:center;cursor:pointer;transition:var(--transition)" onclick="selectMethod('Cash', this)">
+            <div style="font-size:24px">💵</div>
+            <div style="font-size:.8rem;font-weight:600;margin-top:4px">Cash</div>
+          </label>
+        </div>
+      </div>
+      <input type="hidden" id="f-method" value="UPI" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('pay-modal')">Cancel</button>
+      <button class="btn btn-primary" id="pay-btn" onclick="submitPayment()">✅ Pay Now</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/customer.js"></script>
+<script>
+  const session = Auth.requireAuth('customer');
+  let allPayments = [];
+  let payingId = null;
+
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildCustomerSidebar('customer-payments.html');
+    initModalClosers();
+
+    async function load() {
+      allPayments = await API.payments.getByCustomer(session.id);
+      const paid    = allPayments.filter(p => p.Payment_status === 'Paid');
+      const pending = allPayments.filter(p => p.Payment_status === 'Pending');
+      document.getElementById('p-paid').textContent    = formatCurrency(paid.reduce((s,p) => s+p.Amount, 0));
+      document.getElementById('p-pending').textContent = formatCurrency(pending.reduce((s,p) => s+p.Amount, 0));
+      document.getElementById('p-total').textContent   = allPayments.length;
+      document.getElementById('pending-count').textContent = `${pending.length} pending`;
+
+      // Pending dues section
+      const duesEl = document.getElementById('pending-dues-content');
+      if (!pending.length) {
+        duesEl.innerHTML = '<div class="empty-state" style="padding:20px 0"><div class="empty-icon">🎉</div><div class="empty-title">No dues pending</div></div>';
+      } else {
+        duesEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${pending.map(p => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--warning-light);border-radius:var(--radius);border:1px solid #fed7aa">
+            <div>
+              <div style="font-weight:700;font-size:.875rem">${p.Payment_ID} <span class="td-muted">• ${p.Order_ID}</span></div>
+              <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">Awaiting payment</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.1rem;color:var(--warning)">${formatCurrency(p.Amount)}</span>
+              <button class="btn btn-primary btn-sm" onclick="openPayModal('${p.Payment_ID}',${p.Amount},'${p.Order_ID}')">💳 Pay</button>
+            </div>
+          </div>`).join('')}</div>`;
+      }
+
+      renderTable(allPayments);
+    }
+
+    function methodBadge(m) {
+      const map = { UPI: 'badge-info', Card: 'badge-accent', Cash: 'badge-muted' };
+      return `<span class="badge ${map[m]||'badge-muted'}">${m||'N/A'}</span>`;
+    }
+
+    function renderTable(data) {
+      const body = document.getElementById('payments-body');
+      if (!data.length) {
+        body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">💳</div><div class="empty-title">No payments yet</div></div></td></tr>';
+        return;
+      }
+      body.innerHTML = data.map(p => `
+        <tr>
+          <td class="fw-700">${p.Payment_ID}</td>
+          <td>${p.Order_ID}</td>
+          <td class="fw-700" style="color:var(--primary)">${formatCurrency(p.Amount)}</td>
+          <td>${methodBadge(p.Payment_method)}</td>
+          <td>${statusBadge(p.Payment_status)}</td>
+          <td>${p.Payment_Date ? formatDate(p.Payment_Date) : '<span class="td-muted">—</span>'}</td>
+        </tr>`).join('');
+    }
+
+    function filterTable() {
+      const st = document.getElementById('status-filter').value;
+      const mt = document.getElementById('method-filter').value;
+      renderTable(allPayments.filter(p =>
+        (!st || p.Payment_status === st) && (!mt || p.Payment_method === mt)
+      ));
+    }
+
+    function openPayModal(pid, amount, oid) {
+      payingId = pid;
+      document.getElementById('pay-amount').textContent     = formatCurrency(amount);
+      document.getElementById('pay-order-label').textContent = `Order: ${oid}`;
+      // Reset method selection
+      document.querySelectorAll('.method-opt').forEach(el => el.style.borderColor = 'var(--border)');
+      document.getElementById('f-method').value = 'UPI';
+      openModal('pay-modal');
+    }
+
+    function selectMethod(method, el) {
+      document.querySelectorAll('.method-opt').forEach(e => { e.style.borderColor = 'var(--border)'; e.style.background = ''; });
+      el.style.borderColor = 'var(--primary)';
+      el.style.background  = 'var(--primary-bg)';
+      document.getElementById('f-method').value = method;
+    }
+
+    async function submitPayment() {
+      const method = document.getElementById('f-method').value;
+      const btn = document.getElementById('pay-btn');
+      btn.textContent = '⏳ Processing…';
+      btn.disabled = true;
+      await new Promise(r => setTimeout(r, 800));
+      await API.payments.markPaid(payingId, method);
+      showToast('Payment successful! 🎉', 'success');
+      closeModal('pay-modal');
+      btn.textContent = '✅ Pay Now';
+      btn.disabled = false;
+      load();
+    }
+
+    window.openPayModal = openPayModal;
+    window.selectMethod = selectMethod;
+    window.submitPayment = submitPayment;
+    window.filterTable = filterTable;
+    load();
+  }
+</script>
+</body>
+</html>

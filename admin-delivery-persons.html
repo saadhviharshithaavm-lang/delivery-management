@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delivery Personnel — FreshDeliver Admin</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">A</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Admin</div><div class="user-role" id="sidebar-user-role">Administrator</div></div>
+    </div>
+    <nav class="sidebar-nav" id="admin-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Delivery Personnel</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Delivery Personnel</div>
+          <div class="page-subtitle">Manage delivery staff, vehicles, and area assignments</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="openAddModal()">➕ Add Person</button>
+        </div>
+      </div>
+
+      <!-- Cards grid -->
+      <div id="dp-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px;margin-bottom:24px"></div>
+
+      <!-- Table -->
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search name or area…" oninput="filterTable()" />
+          </div>
+          <select class="filter-select" id="vehicle-filter" onchange="filterTable()">
+            <option value="">All Vehicles</option>
+            <option value="Bicycle">Bicycle</option>
+            <option value="Motorbike">Motorbike</option>
+            <option value="E-Bike">E-Bike</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Vehicle Type</th>
+                <th>Area Assigned</th>
+                <th>Deliveries</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="dp-body">
+              <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="dp-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Add Delivery Person</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" id="f-name" class="form-control" placeholder="e.g. Raju Kumar" />
+        </div>
+        <div class="form-group">
+          <label>Phone Number *</label>
+          <input type="text" id="f-phone" class="form-control" placeholder="10-digit number" />
+        </div>
+        <div class="form-group">
+          <label>Vehicle Type *</label>
+          <select id="f-vehicle" class="form-control">
+            <option value="Bicycle">Bicycle</option>
+            <option value="Motorbike">Motorbike</option>
+            <option value="E-Bike">E-Bike</option>
+            <option value="Auto">Auto</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Area Assigned *</label>
+          <input type="text" id="f-area" class="form-control" placeholder="e.g. Koramangala" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('dp-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDP()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  Auth.requireAuth('admin');
+  Auth.initSidebarUser();
+  Auth.initMobileSidebar();
+  buildAdminSidebar('admin-delivery-persons.html');
+  initModalClosers();
+
+  let allDPs = [], allDeliveries = [];
+  let editingId = null;
+
+  const vehicleEmoji = v => ({ Bicycle:'🚲', Motorbike:'🏍️', 'E-Bike':'⚡', Auto:'🛺' }[v] || '🚗');
+
+  async function load() {
+    [allDPs, allDeliveries] = await Promise.all([API.deliveryPersons.getAll(), API.deliveries.getAll()]);
+    renderCards(allDPs);
+    renderTable(allDPs);
+  }
+
+  function getDPDeliveries(id) { return allDeliveries.filter(d => d.DeliveryPerson_ID === id).length; }
+
+  function renderCards(data) {
+    document.getElementById('dp-cards').innerHTML = data.map(dp => `
+      <div class="card" style="padding:20px;text-align:center;cursor:pointer;transition:var(--transition)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''"  >
+        <div style="font-size:48px;margin-bottom:8px">${vehicleEmoji(dp.VehicleType)}</div>
+        <div style="font-weight:700;font-size:1rem;margin-bottom:4px">${dp.Name}</div>
+        <div class="td-muted" style="font-size:.82rem;margin-bottom:8px">${dp.Phone_Num}</div>
+        <div style="display:flex;justify-content:center;gap:8px">
+          <span class="badge badge-primary">${dp.Area_assigned}</span>
+          <span class="badge badge-muted">${dp.VehicleType}</span>
+        </div>
+        <div style="margin-top:10px;font-size:.78rem;color:var(--text-muted)">${getDPDeliveries(dp.DeliveryPerson_ID)} deliveries</div>
+      </div>`).join('');
+  }
+
+  function renderTable(data) {
+    const body = document.getElementById('dp-body');
+    if (!data.length) {
+      body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🧑‍💼</div><div class="empty-title">No personnel found</div></div></td></tr>';
+      return;
+    }
+    body.innerHTML = data.map(dp => `
+      <tr>
+        <td class="td-muted">${dp.DeliveryPerson_ID}</td>
+        <td><strong>${dp.Name}</strong></td>
+        <td>${dp.Phone_Num}</td>
+        <td><span style="margin-right:4px">${vehicleEmoji(dp.VehicleType)}</span>${dp.VehicleType}</td>
+        <td><span class="badge badge-primary">${dp.Area_assigned}</span></td>
+        <td><span class="badge badge-muted">${getDPDeliveries(dp.DeliveryPerson_ID)} total</span></td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-xs" onclick="editDP('${dp.DeliveryPerson_ID}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteDP('${dp.DeliveryPerson_ID}')">🗑️</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }
+
+  function filterTable() {
+    const q  = document.getElementById('search-input').value.toLowerCase();
+    const vf = document.getElementById('vehicle-filter').value;
+    const filtered = allDPs.filter(dp =>
+      (!q || dp.Name.toLowerCase().includes(q) || dp.Area_assigned.toLowerCase().includes(q)) &&
+      (!vf || dp.VehicleType === vf)
+    );
+    renderCards(filtered);
+    renderTable(filtered);
+  }
+
+  function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Delivery Person';
+    ['f-name','f-phone','f-area'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-vehicle').value = 'Bicycle';
+    openModal('dp-modal');
+  }
+
+  function editDP(id) {
+    const dp = allDPs.find(x => x.DeliveryPerson_ID === id);
+    if (!dp) return;
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit Delivery Person';
+    document.getElementById('f-name').value    = dp.Name;
+    document.getElementById('f-phone').value   = dp.Phone_Num;
+    document.getElementById('f-vehicle').value = dp.VehicleType;
+    document.getElementById('f-area').value    = dp.Area_assigned;
+    openModal('dp-modal');
+  }
+
+  async function saveDP() {
+    const name    = document.getElementById('f-name').value.trim();
+    const phone   = document.getElementById('f-phone').value.trim();
+    const vehicle = document.getElementById('f-vehicle').value;
+    const area    = document.getElementById('f-area').value.trim();
+    if (!name || !phone || !area) { showToast('Please fill all required fields', 'error'); return; }
+    const data = { Name: name, Phone_Num: phone, VehicleType: vehicle, Area_assigned: area };
+    if (editingId) {
+      await API.deliveryPersons.update(editingId, data);
+      showToast('Updated successfully!');
+    } else {
+      await API.deliveryPersons.create(data);
+      showToast('Delivery person added!');
+    }
+    closeModal('dp-modal');
+    load();
+  }
+
+  async function deleteDP(id) {
+    if (!confirmAction('Remove this delivery person?')) return;
+    await API.deliveryPersons.delete(id);
+    showToast('Deleted', 'warning');
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

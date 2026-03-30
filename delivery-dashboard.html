@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delivery Portal — FreshDeliver</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🚚</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">D</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Agent</div><div class="user-role" id="sidebar-user-role">Delivery Agent</div></div>
+    </div>
+    <nav class="sidebar-nav" id="delivery-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Delivery Agent Portal</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <!-- Welcome Banner -->
+      <div id="welcome-banner" style="background:linear-gradient(120deg,#1e6b47 0%,#2d9d6e 100%);border-radius:var(--radius-lg);padding:24px 28px;color:white;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+        <div>
+          <h2 style="font-size:1.35rem;margin-bottom:4px">Hello, <span id="dp-name">Agent</span>! 🚴</h2>
+          <p style="opacity:.85;font-size:.875rem">Good morning. Here are your deliveries for today.</p>
+        </div>
+        <div style="font-size:52px">🚚</div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+        <div class="stat-card" style="--card-accent:var(--info)"><div class="stat-header"><span class="stat-label">Total Assigned</span><div class="stat-icon">📋</div></div><div class="stat-value" id="d-total">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--warning)"><div class="stat-header"><span class="stat-label">Pending</span><div class="stat-icon">⏳</div></div><div class="stat-value" id="d-pending">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--success)"><div class="stat-header"><span class="stat-label">Delivered</span><div class="stat-icon">✅</div></div><div class="stat-value" id="d-delivered">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--danger)"><div class="stat-header"><span class="stat-label">Failed</span><div class="stat-icon">❌</div></div><div class="stat-value" id="d-failed">—</div></div>
+      </div>
+
+      <!-- Today's Deliveries -->
+      <div class="card" style="margin-bottom:24px">
+        <div class="card-header">
+          <span class="card-title">📅 Today's Deliveries</span>
+          <span class="badge badge-info" id="today-count">0 today</span>
+        </div>
+        <div id="today-deliveries-content" style="padding:0 20px 16px"></div>
+      </div>
+
+      <!-- All My Deliveries -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🗂️ All My Deliveries</span>
+        </div>
+        <div class="table-toolbar" style="padding:12px 20px;border-top:none">
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Failed">Failed</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Delivery ID</th>
+                <th>Order ID</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="all-deliveries-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Update Status Modal -->
+<div class="modal-overlay" id="status-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Update Delivery Status</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:14px;font-size:.875rem">Delivery: <strong id="del-id-display">—</strong></p>
+      <div class="form-group">
+        <label>New Status</label>
+        <select id="f-status" class="form-control">
+          <option value="Delivered">✅ Delivered — Handover complete</option>
+          <option value="Failed">❌ Failed — Could not deliver</option>
+          <option value="Pending">⏳ Pending — Not yet attempted</option>
+        </select>
+      </div>
+      <div class="form-group" id="remark-group" style="margin-top:12px">
+        <label>Remark (optional)</label>
+        <input type="text" id="f-remark" class="form-control" placeholder="e.g. No one home, left with neighbor…" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('status-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveStatus()">💾 Update</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  const DELIVERY_NAV = [
+    { section: 'My Portal', items: [
+      { icon: '🏠', label: 'Dashboard',        href: 'delivery-dashboard.html' },
+      { icon: '📅', label: 'My Schedule',      href: 'delivery-schedule.html'  },
+      { icon: '🗺️', label: 'My Area',           href: 'delivery-area.html'      },
+    ]}
+  ];
+
+  function buildDeliveryNav(activePage) {
+    const nav = document.getElementById('delivery-nav');
+    if (!nav) return;
+    nav.innerHTML = DELIVERY_NAV.map(section => `
+      <div class="nav-section">
+        <div class="nav-section-label">${section.section}</div>
+        ${section.items.map(item => `
+          <a href="${item.href}" class="nav-item ${item.href === activePage ? 'active' : ''}">
+            <span class="nav-icon">${item.icon}</span>
+            <span>${item.label}</span>
+          </a>`).join('')}
+      </div>`).join('');
+  }
+
+  const session = Auth.requireAuth('delivery');
+  let allMyDeliveries = [];
+  let updatingId = null;
+
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildDeliveryNav('delivery-dashboard.html');
+    initModalClosers();
+    document.getElementById('dp-name').textContent = session.name.split(' ')[0];
+
+    async function load() {
+      const [allDeliveries, allOrders, allSchedules] = await Promise.all([
+        API.deliveries.getAll(), API.orders.getAll(),
+        API.deliverySchedules.getAll()
+      ]);
+
+      allMyDeliveries = allDeliveries.filter(d => d.DeliveryPerson_ID === session.id);
+
+      // Stats
+      document.getElementById('d-total').textContent     = allMyDeliveries.length;
+      document.getElementById('d-pending').textContent   = allMyDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
+      document.getElementById('d-delivered').textContent = allMyDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
+      document.getElementById('d-failed').textContent    = allMyDeliveries.filter(d => d.Delivery_Status === 'Failed').length;
+
+      // Today's deliveries
+      const today = new Date().toISOString().slice(0, 10);
+      const todaysDeliveries = allMyDeliveries.filter(d => d.Delivery_date === today);
+      document.getElementById('today-count').textContent = `${todaysDeliveries.length} today`;
+      const todayEl = document.getElementById('today-deliveries-content');
+      if (!todaysDeliveries.length) {
+        todayEl.innerHTML = '<div class="empty-state" style="padding:24px 0"><div class="empty-icon">🎉</div><div class="empty-title">No deliveries scheduled for today</div></div>';
+      } else {
+        todayEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">${todaysDeliveries.map(d => {
+          const schedule = allSchedules.find(s => s.Delivery_ID === d.Delivery_ID);
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--surface-2);border-radius:var(--radius);border:1px solid var(--border)">
+            <div>
+              <div class="fw-700">${d.Delivery_ID} <span class="td-muted">· ${d.Order_ID}</span></div>
+              ${schedule ? `<div style="font-size:.78rem;color:var(--info);margin-top:2px">🕐 Time Slot: ${schedule.Time_slot}</div>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              ${statusBadge(d.Delivery_Status)}
+              ${d.Delivery_Status === 'Pending'
+                ? `<button class="btn btn-primary btn-sm" onclick="openUpdateModal('${d.Delivery_ID}')">📝 Update</button>`
+                : `<button class="btn btn-secondary btn-sm" onclick="openUpdateModal('${d.Delivery_ID}')">✏️ Change</button>`}
+            </div>
+          </div>`;
+        }).join('')}</div>`;
+      }
+
+      renderTable(allMyDeliveries);
+    }
+
+    function renderTable(data) {
+      const body = document.getElementById('all-deliveries-body');
+      if (!data.length) {
+        body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🚚</div><div class="empty-title">No deliveries assigned yet</div></div></td></tr>';
+        return;
+      }
+      body.innerHTML = [...data].sort((a,b) => b.Delivery_date.localeCompare(a.Delivery_date)).map(d => `
+        <tr>
+          <td class="fw-700">${d.Delivery_ID}</td>
+          <td>${d.Order_ID}</td>
+          <td>${formatDate(d.Delivery_date)}</td>
+          <td>${statusBadge(d.Delivery_Status)}</td>
+          <td>
+            <button class="btn btn-secondary btn-xs" onclick="openUpdateModal('${d.Delivery_ID}')">✏️ Update</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    function filterTable() {
+      const st = document.getElementById('status-filter').value;
+      renderTable(allMyDeliveries.filter(d => !st || d.Delivery_Status === st));
+    }
+
+    function openUpdateModal(id) {
+      updatingId = id;
+      const d = allMyDeliveries.find(x => x.Delivery_ID === id);
+      document.getElementById('del-id-display').textContent = id;
+      document.getElementById('f-status').value = d?.Delivery_Status || 'Delivered';
+      document.getElementById('f-remark').value = '';
+      openModal('status-modal');
+    }
+
+    async function saveStatus() {
+      const newStatus = document.getElementById('f-status').value;
+      await API.deliveries.update(updatingId, { Delivery_Status: newStatus });
+      showToast(newStatus === 'Delivered' ? '✅ Marked as Delivered!' : '🔄 Status updated!');
+      closeModal('status-modal');
+      load();
+    }
+
+    window.filterTable = filterTable;
+    window.openUpdateModal = openUpdateModal;
+    window.saveStatus = saveStatus;
+    load();
+  }
+</script>
+</body>
+</html>

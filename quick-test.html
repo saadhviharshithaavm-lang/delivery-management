@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head><title>Quick Test</title></head>
+<body>
+<h1>Quick Login Test</h1>
+<button onclick="testLogin()">Test Admin Login</button>
+<pre id="output"></pre>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+function log(msg) {
+  document.getElementById('output').textContent += msg + '\n';
+}
+
+window.onerror = function(msg, url, line) {
+  log('ERROR: ' + msg + ' at line ' + line);
+};
+
+// Check if scripts loaded
+log('1. Checking if API loaded: ' + (typeof API !== 'undefined'));
+log('2. Checking if Auth loaded: ' + (typeof Auth !== 'undefined'));
+
+if (typeof Auth !== 'undefined') {
+  log('3. Auth.login type: ' + typeof Auth.login);
+} else {
+  log('3. ERROR: Auth object not defined!');
+  log('   Window keys: ' + Object.keys(window).filter(k => k.includes('auth') || k.includes('Auth')));
+}
+
+function testLogin() {
+  log('\n--- Testing Login ---');
+  try {
+    log('Calling Auth.login("admin", "admin123")...');
+    const result = Auth.login('admin', 'admin123');
+    log('Result: ' + JSON.stringify(result, null, 2));
+
+    if (result.success) {
+      log('\n✓ LOGIN SUCCESSFUL!');
+      const session = Auth.getSession();
+      log('Session: ' + JSON.stringify(session, null, 2));
+    } else {
+      log('\n✗ LOGIN FAILED: ' + result.error);
+    }
+  } catch (e) {
+    log('\n✗ EXCEPTION: ' + e.message);
+    log('Stack: ' + e.stack);
+  }
+}
+
+// Auto-run test
+setTimeout(() => {
+  log('\n=== AUTO-RUNNING TEST ===\n');
+  testLogin();
+}, 100);
+</script>
+</body>
+</html>

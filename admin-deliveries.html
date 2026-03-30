@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deliveries — FreshDeliver Admin</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">A</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Admin</div><div class="user-role" id="sidebar-user-role">Administrator</div></div>
+    </div>
+    <nav class="sidebar-nav" id="admin-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Delivery Management</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Deliveries</div>
+          <div class="page-subtitle">Track, assign, and update delivery status</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="openAddModal()">➕ Add Delivery</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
+        <div class="stat-card" style="--card-accent:var(--success)"><div class="stat-header"><span class="stat-label">Delivered</span><div class="stat-icon">✅</div></div><div class="stat-value" id="d-del">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--warning)"><div class="stat-header"><span class="stat-label">Pending</span><div class="stat-icon">⏳</div></div><div class="stat-value" id="d-pen">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--danger)"><div class="stat-header"><span class="stat-label">Failed</span><div class="stat-icon">❌</div></div><div class="stat-value" id="d-fail">—</div></div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search delivery ID or order…" oninput="filterTable()" />
+          </div>
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Status</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Pending">Pending</option>
+            <option value="Failed">Failed</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Delivery ID</th>
+                <th>Order ID</th>
+                <th>Delivery Date</th>
+                <th>Status</th>
+                <th>Delivery Person</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="deliveries-body">
+              <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Delivery Modal -->
+<div class="modal-overlay" id="delivery-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Add Delivery</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Order *</label>
+          <select id="f-order" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Delivery Person *</label>
+          <select id="f-dp" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Delivery Date *</label>
+          <input type="date" id="f-date" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="f-status" class="form-control">
+            <option value="Pending">Pending</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Failed">Failed</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('delivery-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDelivery()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  Auth.requireAuth('admin');
+  Auth.initSidebarUser();
+  Auth.initMobileSidebar();
+  buildAdminSidebar('admin-deliveries.html');
+  initModalClosers();
+
+  let allDeliveries = [], allDPs = [], allOrders = [];
+  let editingId = null;
+
+  async function load() {
+    [allDeliveries, allDPs, allOrders] = await Promise.all([
+      API.deliveries.getAll(), API.deliveryPersons.getAll(), API.orders.getAll()
+    ]);
+    document.getElementById('d-del').textContent  = allDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
+    document.getElementById('d-pen').textContent  = allDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
+    document.getElementById('d-fail').textContent = allDeliveries.filter(d => d.Delivery_Status === 'Failed').length;
+    renderTable(allDeliveries);
+  }
+
+  const dpMap = () => Object.fromEntries(allDPs.map(d => [d.DeliveryPerson_ID, d.Name]));
+
+  function renderTable(data) {
+    const body = document.getElementById('deliveries-body');
+    const dm = dpMap();
+    if (!data.length) {
+      body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🚚</div><div class="empty-title">No deliveries found</div></div></td></tr>';
+      return;
+    }
+    body.innerHTML = [...data].sort((a,b) => b.Delivery_date.localeCompare(a.Delivery_date)).map(d => `
+      <tr>
+        <td class="fw-700">${d.Delivery_ID}</td>
+        <td>${d.Order_ID}</td>
+        <td>${formatDate(d.Delivery_date)}</td>
+        <td>${statusBadge(d.Delivery_Status)}</td>
+        <td>${dm[d.DeliveryPerson_ID] || d.DeliveryPerson_ID}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-xs" onclick="editDelivery('${d.Delivery_ID}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteDelivery('${d.Delivery_ID}')">🗑️</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }
+
+  function filterTable() {
+    const q  = document.getElementById('search-input').value.toLowerCase();
+    const st = document.getElementById('status-filter').value;
+    renderTable(allDeliveries.filter(d =>
+      (!q || d.Delivery_ID.toLowerCase().includes(q) || d.Order_ID.toLowerCase().includes(q)) &&
+      (!st || d.Delivery_Status === st)
+    ));
+  }
+
+  function populateDropdowns() {
+    document.getElementById('f-order').innerHTML = allOrders.map(o => `<option value="${o.Order_ID}">${o.Order_ID} (${formatCurrency(o.Total_amount)})</option>`).join('');
+    document.getElementById('f-dp').innerHTML = allDPs.map(d => `<option value="${d.DeliveryPerson_ID}">${d.Name} — ${d.Area_assigned}</option>`).join('');
+  }
+
+  function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Delivery';
+    populateDropdowns();
+    document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+    document.getElementById('f-status').value = 'Pending';
+    openModal('delivery-modal');
+  }
+
+  function editDelivery(id) {
+    const d = allDeliveries.find(x => x.Delivery_ID === id);
+    if (!d) return;
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit Delivery';
+    populateDropdowns();
+    document.getElementById('f-order').value  = d.Order_ID;
+    document.getElementById('f-dp').value     = d.DeliveryPerson_ID;
+    document.getElementById('f-date').value   = d.Delivery_date;
+    document.getElementById('f-status').value = d.Delivery_Status;
+    openModal('delivery-modal');
+  }
+
+  async function saveDelivery() {
+    const data = {
+      Order_ID: document.getElementById('f-order').value,
+      DeliveryPerson_ID: document.getElementById('f-dp').value,
+      Delivery_date: document.getElementById('f-date').value,
+      Delivery_Status: document.getElementById('f-status').value,
+    };
+    if (!data.Delivery_date) { showToast('Please select a delivery date', 'error'); return; }
+    if (editingId) {
+      await API.deliveries.update(editingId, data);
+      showToast('Delivery updated!');
+    } else {
+      await API.deliveries.create(data);
+      showToast('Delivery added!');
+    }
+    closeModal('delivery-modal');
+    load();
+  }
+
+  async function deleteDelivery(id) {
+    if (!confirmAction('Delete this delivery record?')) return;
+    await API.deliveries.delete(id);
+    showToast('Delivery deleted', 'warning');
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

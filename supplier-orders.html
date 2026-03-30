@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orders — Supplier Portal</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🏭</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">S</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Supplier</div><div class="user-role" id="sidebar-user-role">Supplier</div></div>
+    </div>
+    <nav class="sidebar-nav" id="supplier-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Orders</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Orders for My Products</div>
+          <div class="page-subtitle">Track incoming orders that include your items</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Processing">Processing</option>
+            <option value="Delivered">Delivered</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Order Date</th>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Order Status</th>
+              </tr>
+            </thead>
+            <tbody id="orders-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  const SUPPLIER_NAV = [
+    { section: 'Portal', items: [
+      { icon: '🏠', label: 'Dashboard',    href: 'supplier-dashboard.html' },
+      { icon: '📦', label: 'My Products',  href: 'supplier-products.html'  },
+      { icon: '📋', label: 'Orders',       href: 'supplier-orders.html'    },
+    ]}
+  ];
+
+  function buildSupplierSidebar(activePage) {
+    const nav = document.getElementById('supplier-nav');
+    if (!nav) return;
+    nav.innerHTML = SUPPLIER_NAV.map(section => `
+      <div class="nav-section">
+        <div class="nav-section-label">${section.section}</div>
+        ${section.items.map(item => `
+          <a href="${item.href}" class="nav-item ${item.href === activePage ? 'active' : ''}">
+            <span class="nav-icon">${item.icon}</span>
+            <span>${item.label}</span>
+          </a>`).join('')}
+      </div>`).join('');
+  }
+
+  const session = Auth.requireAuth('supplier');
+  let myOrderItemsData = [];
+
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildSupplierSidebar('supplier-orders.html');
+
+    async function load() {
+      const [allProducts, allOrders, allOrderItems] = await Promise.all([
+        API.products.getAll(),
+        API.orders.getAll(), 
+        API.orderItems.getAll()
+      ]);
+
+      const myProductIDs = allProducts.filter(p => p.Supplier_ID === session.id).map(p => p.Product_ID);
+      const prodMap = Object.fromEntries(allProducts.map(p => [p.Product_ID, p.Product_Name]));
+      
+      const myItems = allOrderItems.filter(i => myProductIDs.includes(i.Product_ID));
+      
+      myOrderItemsData = myItems.map(i => {
+        const o = allOrders.find(x => x.Order_ID === i.Order_ID) || {};
+        return {
+          Order_ID: i.Order_ID,
+          Order_date: o.Order_date,
+          Order_status: o.Order_status || 'Unknown',
+          Product_Name: prodMap[i.Product_ID] || i.Product_ID,
+          Quantity: i.Quantity
+        };
+      }).sort((a, b) => (b.Order_date || '').localeCompare(a.Order_date || ''));
+
+      renderTable(myOrderItemsData);
+    }
+
+    function renderTable(data) {
+      const body = document.getElementById('orders-body');
+      if (!data.length) {
+        body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No orders found</div></div></td></tr>';
+        return;
+      }
+      body.innerHTML = data.map(item => `
+        <tr>
+          <td class="fw-700">${item.Order_ID}</td>
+          <td>${formatDate(item.Order_date)}</td>
+          <td><strong>${item.Product_Name}</strong></td>
+          <td>${item.Quantity}</td>
+          <td>${statusBadge(item.Order_status)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function filterTable() {
+      const st = document.getElementById('status-filter').value;
+      renderTable(myOrderItemsData.filter(d => !st || d.Order_status === st));
+    }
+
+    window.filterTable = filterTable;
+    load();
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login Test</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    .test { margin: 10px 0; padding: 10px; background: #f0f0f0; }
+    .pass { background: #d4edda; }
+    .fail { background: #f8d7da; }
+  </style>
+</head>
+<body>
+  <h1>Login System Diagnostics</h1>
+  <div id="results"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    const results = document.getElementById('results');
+
+    function test(name, fn) {
+      try {
+        const result = fn();
+        if (result) {
+          results.innerHTML += `<div class="test pass">✓ ${name}</div>`;
+          return true;
+        } else {
+          results.innerHTML += `<div class="test fail">✗ ${name}</div>`;
+          return false;
+        }
+      } catch (e) {
+        results.innerHTML += `<div class="test fail">✗ ${name} - ERROR: ${e.message}</div>`;
+        return false;
+      }
+    }
+
+    // Run tests
+    test('API object exists', () => typeof API !== 'undefined');
+    test('Auth object exists', () => typeof Auth !== 'undefined');
+    test('Auth.login is a function', () => typeof Auth.login === 'function');
+    test('Auth.getSession is a function', () => typeof Auth.getSession === 'function');
+
+    // Test actual login
+    results.innerHTML += '<h2>Login Tests:</h2>';
+
+    // Test admin login
+    try {
+      const adminResult = Auth.login('admin', 'admin123');
+      results.innerHTML += `<div class="test ${adminResult.success ? 'pass' : 'fail'}">
+        Admin login: ${JSON.stringify(adminResult, null, 2)}
+      </div>`;
+
+      if (adminResult.success) {
+        const session = Auth.getSession();
+        results.innerHTML += `<div class="test">Session: ${JSON.stringify(session, null, 2)}</div>`;
+      }
+    } catch (e) {
+      results.innerHTML += `<div class="test fail">Admin login ERROR: ${e.message}<br>${e.stack}</div>`;
+    }
+
+    // Test customer login
+    try {
+      Auth.logout(); // Clear session first
+      const custResult = Auth.login('priya', 'pass123');
+      results.innerHTML += `<div class="test ${custResult.success ? 'pass' : 'fail'}">
+        Customer login: ${JSON.stringify(custResult, null, 2)}
+      </div>`;
+    } catch (e) {
+      results.innerHTML += `<div class="test fail">Customer login ERROR: ${e.message}<br>${e.stack}</div>`;
+    }
+
+    // Test wrong credentials
+    try {
+      Auth.logout();
+      const wrongResult = Auth.login('admin', 'wrongpass');
+      results.innerHTML += `<div class="test ${!wrongResult.success ? 'pass' : 'fail'}">
+        Wrong password test: ${JSON.stringify(wrongResult, null, 2)}
+      </div>`;
+    } catch (e) {
+      results.innerHTML += `<div class="test fail">Wrong password test ERROR: ${e.message}</div>`;
+    }
+
+    // Check localStorage
+    results.innerHTML += '<h2>Storage Check:</h2>';
+    results.innerHTML += `<div class="test">localStorage keys: ${Object.keys(localStorage).join(', ')}</div>`;
+    results.innerHTML += `<div class="test">sessionStorage keys: ${Object.keys(sessionStorage).join(', ')}</div>`;
+  </script>
+</body>
+</html>

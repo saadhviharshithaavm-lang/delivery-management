@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Area — Delivery Portal</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🚚</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">D</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Agent</div><div class="user-role" id="sidebar-user-role">Delivery Agent</div></div>
+    </div>
+    <nav class="sidebar-nav" id="delivery-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">My Area Coverage</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Assigned Area</div>
+          <div class="page-subtitle">Your designated delivery zones and sectors</div>
+        </div>
+      </div>
+
+      <div class="stats-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:24px">
+        <div class="stat-card" style="--card-accent:var(--primary)">
+          <div class="stat-header"><span class="stat-label">Primary Zone</span><div class="stat-icon">📍</div></div>
+          <div class="stat-value" style="font-size:1.5rem">North-West Sector</div>
+        </div>
+        <div class="stat-card" style="--card-accent:var(--info)">
+          <div class="stat-header"><span class="stat-label">Active Customers in Area</span><div class="stat-icon">👥</div></div>
+          <div class="stat-value">142</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🗺️ Zone Details</span>
+        </div>
+        <div style="padding:20px;line-height:1.6;color:var(--text-secondary)">
+          <p style="margin-bottom:12px">Below are the specific sectors and neighborhoods you are responsible for delivering to.</p>
+          <ul style="list-style-type:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+            <li style="background:var(--surface-2);border:1px solid var(--border);padding:12px 16px;border-radius:var(--radius);font-weight:600">Sector 14 - Kormanagala</li>
+            <li style="background:var(--surface-2);border:1px solid var(--border);padding:12px 16px;border-radius:var(--radius);font-weight:600">Sector 15 - Indira Nagar</li>
+            <li style="background:var(--surface-2);border:1px solid var(--border);padding:12px 16px;border-radius:var(--radius);font-weight:600">Sector 16 - Defense Colony</li>
+            <li style="background:var(--surface-2);border:1px solid var(--border);padding:12px 16px;border-radius:var(--radius);font-weight:600">Tech Park Road Extension</li>
+          </ul>
+          
+          <div style="margin-top:24px;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--border);height:300px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;color:var(--text-muted)">
+            [ Map View Placeholder ]
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  const DELIVERY_NAV = [
+    { section: 'My Portal', items: [
+      { icon: '🏠', label: 'Dashboard',        href: 'delivery-dashboard.html' },
+      { icon: '📅', label: 'My Schedule',      href: 'delivery-schedule.html'  },
+      { icon: '🗺️', label: 'My Area',           href: 'delivery-area.html'      },
+    ]}
+  ];
+
+  function buildDeliveryNav(activePage) {
+    const nav = document.getElementById('delivery-nav');
+    if (!nav) return;
+    nav.innerHTML = DELIVERY_NAV.map(section => `
+      <div class="nav-section">
+        <div class="nav-section-label">${section.section}</div>
+        ${section.items.map(item => `
+          <a href="${item.href}" class="nav-item ${item.href === activePage ? 'active' : ''}">
+            <span class="nav-icon">${item.icon}</span>
+            <span>${item.label}</span>
+          </a>`).join('')}
+      </div>`).join('');
+  }
+
+  const session = Auth.requireAuth('delivery');
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildDeliveryNav('delivery-area.html');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Orders — FreshDeliver</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">P</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Customer</div><div class="user-role" id="sidebar-user-role">Customer</div></div>
+    </div>
+    <nav class="sidebar-nav" id="customer-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">My Orders</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">My Orders</div>
+          <div class="page-subtitle">Your complete order history</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search order ID…" oninput="filterTable()" />
+          </div>
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Processing">Processing</option>
+            <option value="Delivered">Delivered</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Order Date</th>
+                <th>Items</th>
+                <th>Total Amount</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="orders-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Order Detail Modal -->
+<div class="modal-overlay" id="order-detail-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header"><span class="modal-title" id="detail-title">Order Details</span><button class="modal-close">✕</button></div>
+    <div class="modal-body" id="order-detail-body"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('order-detail-modal')">Close</button></div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/customer.js"></script>
+<script>
+  const session = Auth.requireAuth('customer');
+  let allOrders = [], allItems = [], allProducts = [];
+
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildCustomerSidebar('customer-orders.html');
+    initModalClosers();
+
+    async function load() {
+      [allOrders, allItems, allProducts] = await Promise.all([
+        API.orders.getByCustomer(session.id),
+        API.orderItems.getAll(), API.products.getAll()
+      ]);
+      renderTable(allOrders);
+    }
+
+    const prodMap = () => Object.fromEntries(allProducts.map(p => [p.Product_ID, p.Product_Name]));
+
+    function getItemCount(oid) { return allItems.filter(i => i.Order_ID === oid).length; }
+
+    function renderTable(data) {
+      const body = document.getElementById('orders-body');
+      if (!data.length) {
+        body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No orders yet</div><div class="empty-desc">Your orders will appear here once generated from your subscriptions.</div></div></td></tr>';
+        return;
+      }
+      const sorted = [...data].sort((a,b) => b.Order_date.localeCompare(a.Order_date));
+      body.innerHTML = sorted.map(o => `
+        <tr>
+          <td class="fw-700">${o.Order_ID}</td>
+          <td>${formatDate(o.Order_date)}</td>
+          <td><span class="badge badge-muted">${getItemCount(o.Order_ID)} item(s)</span></td>
+          <td class="fw-700" style="color:var(--primary)">${formatCurrency(o.Total_amount)}</td>
+          <td>${statusBadge(o.Order_status)}</td>
+          <td><button class="btn btn-secondary btn-xs" onclick="viewOrder('${o.Order_ID}')">👁️ View</button></td>
+        </tr>`).join('');
+    }
+
+    function filterTable() {
+      const q  = document.getElementById('search-input').value.toLowerCase();
+      const st = document.getElementById('status-filter').value;
+      renderTable(allOrders.filter(o =>
+        (!q || o.Order_ID.toLowerCase().includes(q)) && (!st || o.Order_status === st)
+      ));
+    }
+
+    function viewOrder(oid) {
+      const order = allOrders.find(o => o.Order_ID === oid);
+      const pm = prodMap();
+      const items = allItems.filter(i => i.Order_ID === oid);
+      document.getElementById('detail-title').textContent = `Order ${oid}`;
+      document.getElementById('order-detail-body').innerHTML = `
+        <div class="info-row" style="margin-bottom:20px">
+          <div class="info-item"><div class="info-label">Date</div><div class="info-value">${formatDate(order.Order_date)}</div></div>
+          <div class="info-item"><div class="info-label">Status</div><div class="info-value">${statusBadge(order.Order_status)}</div></div>
+          <div class="info-item"><div class="info-label">Total</div><div class="info-value fw-700" style="color:var(--primary)">${formatCurrency(order.Total_amount)}</div></div>
+        </div>
+        <h5 style="margin-bottom:12px">Order Items</h5>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Product</th><th>Qty</th><th>Price/Unit</th><th>Subtotal</th></tr></thead>
+            <tbody>${items.map(i => `
+              <tr>
+                <td>${pm[i.Product_ID]||i.Product_ID}</td>
+                <td>${i.Quantity}</td>
+                <td>${formatCurrency(i.Price)}</td>
+                <td class="fw-700">${formatCurrency(i.Quantity * i.Price)}</td>
+              </tr>`).join('')}
+              <tr style="background:var(--surface-2)">
+                <td colspan="3" class="fw-700 text-right">Total</td>
+                <td class="fw-700" style="color:var(--primary)">${formatCurrency(order.Total_amount)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>`;
+      openModal('order-detail-modal');
+    }
+
+    window.filterTable = filterTable;
+    window.viewOrder = viewOrder;
+    load();
+  }
+</script>
+</body>
+</html>

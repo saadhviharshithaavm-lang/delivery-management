@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Dashboard — FreshDeliver</title>
+  <link rel="stylesheet" href="index.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">P</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Customer</div><div class="user-role" id="sidebar-user-role">Customer</div></div>
+    </div>
+    <nav class="sidebar-nav" id="customer-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">My Dashboard</span>
+      <div class="topbar-actions">
+        <a href="customer-payments.html" class="btn btn-accent btn-sm">💳 Pay Now</a>
+      </div>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <!-- Welcome Banner -->
+      <div style="background:linear-gradient(120deg,var(--primary) 0%,var(--primary-light) 100%);border-radius:var(--radius-lg);padding:24px 28px;color:white;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+        <div>
+          <h2 style="font-size:1.35rem;margin-bottom:4px">Good Morning, <span id="cust-name">Customer</span>! 🌿</h2>
+          <p style="opacity:.85;font-size:.875rem">Here's your delivery summary for today.</p>
+        </div>
+        <div style="font-size:52px">🥛</div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="margin-bottom:24px">
+        <div class="stat-card" style="--card-accent:var(--primary)"><div class="stat-header"><span class="stat-label">Active Subscriptions</span><div class="stat-icon">🔄</div></div><div class="stat-value" id="c-subs">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--info)"><div class="stat-header"><span class="stat-label">Total Orders</span><div class="stat-icon">📋</div></div><div class="stat-value" id="c-orders">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--success)"><div class="stat-header"><span class="stat-label">Deliveries Received</span><div class="stat-icon">📦</div></div><div class="stat-value" id="c-delivered">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--warning)"><div class="stat-header"><span class="stat-label">Pending Payment</span><div class="stat-icon">💳</div></div><div class="stat-value" id="c-pending-pay">—</div></div>
+      </div>
+
+      <!-- Next Delivery + Recent Orders -->
+      <div class="dashboard-grid dashboard-grid-2" style="gap:24px">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🚚 Upcoming Deliveries</span>
+            <a href="customer-deliveries.html" class="btn btn-secondary btn-sm">View All</a>
+          </div>
+          <div id="upcoming-deliveries-content" style="padding:16px 20px"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📋 Recent Orders</span>
+            <a href="customer-orders.html" class="btn btn-secondary btn-sm">View All</a>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Order ID</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
+              <tbody id="recent-orders-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- My Subscriptions -->
+      <div class="card" style="margin-top:24px">
+        <div class="card-header">
+          <span class="card-title">🔄 My Active Subscriptions</span>
+          <a href="customer-subscriptions.html" class="btn btn-secondary btn-sm">Manage</a>
+        </div>
+        <div id="subscriptions-content" style="padding:16px 20px"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/customer.js"></script>
+<script>
+  const session = Auth.requireAuth('customer');
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildCustomerSidebar('customer-dashboard.html');
+    document.getElementById('cust-name').textContent = session.name.split(' ')[0];
+
+    async function load() {
+      const cid = session.id;
+      const [stats, orders, deliveries, subs, allProducts, subDetails] = await Promise.all([
+        API.stats.getCustomerStats(cid),
+        API.orders.getByCustomer(cid),
+        API.deliveries.getByCustomer(cid),
+        API.subscriptions.getByCustomer(cid),
+        API.products.getAll(),
+        API.subscriptionDetails.getAll()
+      ]);
+
+      document.getElementById('c-subs').textContent       = stats.activeSubscriptions;
+      document.getElementById('c-orders').textContent     = stats.totalOrders;
+      document.getElementById('c-delivered').textContent  = stats.deliveredCount;
+      document.getElementById('c-pending-pay').textContent = '₹' + stats.pendingAmount;
+
+      // Upcoming deliveries
+      const upcoming = deliveries.filter(d => d.Delivery_Status === 'Pending').slice(0,3);
+      const upEl = document.getElementById('upcoming-deliveries-content');
+      if (upcoming.length === 0) {
+        upEl.innerHTML = '<div class="empty-state" style="padding:32px 0"><div class="empty-icon">✅</div><div class="empty-title">No pending deliveries</div><div class="empty-desc">All caught up!</div></div>';
+      } else {
+        upEl.innerHTML = `<div class="timeline">${upcoming.map(d => `
+          <div class="timeline-item">
+            <div class="timeline-dot">🚚</div>
+            <div class="timeline-content">
+              <div class="timeline-title">Delivery ${d.Delivery_ID}</div>
+              <div class="timeline-sub">Order: ${d.Order_ID} • ${formatDate(d.Delivery_date)}</div>
+            </div>
+            <div>${statusBadge(d.Delivery_Status)}</div>
+          </div>`).join('')}</div>`;
+      }
+
+      // Recent orders
+      const recentOrders = [...orders].sort((a,b) => b.Order_date.localeCompare(a.Order_date)).slice(0,4);
+      document.getElementById('recent-orders-body').innerHTML = recentOrders.map(o => `
+        <tr>
+          <td class="fw-700">${o.Order_ID}</td>
+          <td>${formatDate(o.Order_date)}</td>
+          <td class="fw-700" style="color:var(--primary)">${formatCurrency(o.Total_amount)}</td>
+          <td>${statusBadge(o.Order_status)}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted" style="padding:20px">No orders yet</td></tr>';
+
+      // Active subscriptions
+      const prodMap = Object.fromEntries(allProducts.map(p => [p.Product_ID, p]));
+      const activeSubs = subs.filter(s => s.Status === 'Active');
+      const subEl = document.getElementById('subscriptions-content');
+      if (activeSubs.length === 0) {
+        subEl.innerHTML = `<div class="empty-state" style="padding:32px 0"><div class="empty-icon">🔄</div><div class="empty-title">No active subscriptions</div><a href="customer-subscriptions.html" class="btn btn-primary" style="margin-top:8px">Subscribe Now</a></div>`;
+      } else {
+        subEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">
+          ${activeSubs.map(s => {
+            const details = subDetails.filter(d => d.Subscription_ID === s.Subscription_ID);
+            return `<div style="padding:16px;background:var(--primary-bg);border-radius:var(--radius);border:1px solid rgba(26,124,78,.18)">
+              <div style="font-weight:700;margin-bottom:6px;font-size:.9rem">${s.Subscription_ID}</div>
+              <div>${statusBadge(s.Status)}</div>
+              <div style="margin-top:10px;font-size:.78rem;color:var(--text-muted)">${details.map(d => {
+                const p = prodMap[d.Product_ID];
+                return p ? `<div>• ${p.Product_Name} — ${d.Quantity_Per_Day}/day</div>` : '';
+              }).join('')}</div>
+              <div style="margin-top:8px;font-size:.72rem;color:var(--text-muted)">Until ${formatDate(s.End_date)}</div>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }
+    }
+    load();
+  }
+</script>
+</body>
+</html>

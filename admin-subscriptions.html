@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subscriptions — FreshDeliver Admin</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">A</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Admin</div><div class="user-role" id="sidebar-user-role">Administrator</div></div>
+    </div>
+    <nav class="sidebar-nav" id="admin-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Subscription Management</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Subscriptions</div>
+          <div class="page-subtitle">View and manage all customer subscriptions</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="openAddModal()">➕ Add Subscription</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+        <div class="stat-card" style="--card-accent:var(--success)"><div class="stat-header"><span class="stat-label">Active</span><div class="stat-icon">✅</div></div><div class="stat-value" id="s-active">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--warning)"><div class="stat-header"><span class="stat-label">Paused</span><div class="stat-icon">⏸️</div></div><div class="stat-value" id="s-paused">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--danger)"><div class="stat-header"><span class="stat-label">Cancelled</span><div class="stat-icon">❌</div></div><div class="stat-value" id="s-cancelled">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--primary)"><div class="stat-header"><span class="stat-label">Total</span><div class="stat-icon">🔄</div></div><div class="stat-value" id="s-total">—</div></div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search by subscription ID or customer…" oninput="filterTable()" />
+          </div>
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Paused">Paused</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Sub ID</th>
+                <th>Customer</th>
+                <th>Supplier</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Status</th>
+                <th>Products</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="subs-body">
+              <tr><td colspan="8" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Subscription Modal -->
+<div class="modal-overlay" id="sub-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Add Subscription</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Customer *</label>
+          <select id="f-customer" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Supplier *</label>
+          <select id="f-supplier" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Start Date *</label>
+          <input type="date" id="f-start" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>End Date *</label>
+          <input type="date" id="f-end" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="f-status" class="form-control">
+            <option value="Active">Active</option>
+            <option value="Paused">Paused</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('sub-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSub()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  Auth.requireAuth('admin');
+  Auth.initSidebarUser();
+  Auth.initMobileSidebar();
+  buildAdminSidebar('admin-subscriptions.html');
+  initModalClosers();
+
+  let allSubs = [], allCustomers = [], allSuppliers = [], allDetails = [], allProducts = [];
+  let editingId = null;
+
+  async function load() {
+    [allSubs, allCustomers, allSuppliers, allDetails, allProducts] = await Promise.all([
+      API.subscriptions.getAll(), API.customers.getAll(), API.suppliers.getAll(),
+      API.subscriptionDetails.getAll(), API.products.getAll()
+    ]);
+    document.getElementById('s-active').textContent    = allSubs.filter(s => s.Status === 'Active').length;
+    document.getElementById('s-paused').textContent    = allSubs.filter(s => s.Status === 'Paused').length;
+    document.getElementById('s-cancelled').textContent = allSubs.filter(s => s.Status === 'Cancelled').length;
+    document.getElementById('s-total').textContent     = allSubs.length;
+    renderTable(allSubs);
+  }
+
+  const custMap = () => Object.fromEntries(allCustomers.map(c => [c.Customer_ID, c.Name]));
+  const suppMap = () => Object.fromEntries(allSuppliers.map(s => [s.Supplier_ID, s.Supplier_Name]));
+
+  function getSubProducts(sid) {
+    return allDetails.filter(d => d.Subscription_ID === sid).map(d => {
+      const pname = allProducts.find(p => p.Product_ID === d.Product_ID)?.Product_Name || d.Product_ID;
+      return `${pname} (${d.Quantity_Per_Day}/day)`;
+    });
+  }
+
+  function renderTable(data) {
+    const body = document.getElementById('subs-body');
+    const cm = custMap(), sm = suppMap();
+    if (!data.length) {
+      body.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-title">No subscriptions found</div></div></td></tr>';
+      return;
+    }
+    body.innerHTML = data.map(s => {
+      const prods = getSubProducts(s.Subscription_ID);
+      return `<tr>
+        <td class="td-muted">${s.Subscription_ID}</td>
+        <td><strong>${cm[s.Customer_ID] || s.Customer_ID}</strong></td>
+        <td>${sm[s.Supplier_ID] || s.Supplier_ID}</td>
+        <td>${formatDate(s.Start_date)}</td>
+        <td>${formatDate(s.End_date)}</td>
+        <td>${statusBadge(s.Status)}</td>
+        <td style="max-width:160px">${prods.map(p => `<span class="badge badge-muted" style="margin:2px;font-size:.68rem">${p}</span>`).join('') || '<span class="td-muted">None</span>'}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-xs" onclick="editSub('${s.Subscription_ID}')">✏️</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteSub('${s.Subscription_ID}')">🗑️</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filterTable() {
+    const q  = document.getElementById('search-input').value.toLowerCase();
+    const st = document.getElementById('status-filter').value;
+    const cm = custMap();
+    renderTable(allSubs.filter(s =>
+      (!q || s.Subscription_ID.toLowerCase().includes(q) || (cm[s.Customer_ID]||'').toLowerCase().includes(q)) &&
+      (!st || s.Status === st)
+    ));
+  }
+
+  function populateDropdowns() {
+    document.getElementById('f-customer').innerHTML = allCustomers.map(c => `<option value="${c.Customer_ID}">${c.Name}</option>`).join('');
+    document.getElementById('f-supplier').innerHTML = allSuppliers.map(s => `<option value="${s.Supplier_ID}">${s.Supplier_Name}</option>`).join('');
+  }
+
+  function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Subscription';
+    populateDropdowns();
+    document.getElementById('f-start').value = new Date().toISOString().slice(0,10);
+    document.getElementById('f-end').value = '';
+    document.getElementById('f-status').value = 'Active';
+    openModal('sub-modal');
+  }
+
+  function editSub(id) {
+    const s = allSubs.find(x => x.Subscription_ID === id);
+    if (!s) return;
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit Subscription';
+    populateDropdowns();
+    document.getElementById('f-customer').value = s.Customer_ID;
+    document.getElementById('f-supplier').value = s.Supplier_ID;
+    document.getElementById('f-start').value  = s.Start_date;
+    document.getElementById('f-end').value    = s.End_date;
+    document.getElementById('f-status').value = s.Status;
+    openModal('sub-modal');
+  }
+
+  async function saveSub() {
+    const data = {
+      Customer_ID: document.getElementById('f-customer').value,
+      Supplier_ID: document.getElementById('f-supplier').value,
+      Start_date:  document.getElementById('f-start').value,
+      End_date:    document.getElementById('f-end').value,
+      Status:      document.getElementById('f-status').value,
+    };
+    if (!data.Start_date || !data.End_date) { showToast('Please fill all required fields', 'error'); return; }
+    if (editingId) {
+      await API.subscriptions.update(editingId, data);
+      showToast('Subscription updated!');
+    } else {
+      await API.subscriptions.create(data);
+      showToast('Subscription created!');
+    }
+    closeModal('sub-modal');
+    load();
+  }
+
+  async function deleteSub(id) {
+    if (!confirmAction('Delete this subscription?')) return;
+    await API.subscriptions.delete(id);
+    showToast('Subscription deleted', 'warning');
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

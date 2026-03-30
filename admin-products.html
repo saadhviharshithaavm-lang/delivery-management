@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Products — FreshDeliver Admin</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">A</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Admin</div><div class="user-role" id="sidebar-user-role">Administrator</div></div>
+    </div>
+    <nav class="sidebar-nav" id="admin-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Product Catalog</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Products</div>
+          <div class="page-subtitle">Manage milk and vegetable products</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="openAddModal()">➕ Add Product</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search product name or unit…" oninput="filterTable()" />
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Product ID</th>
+                <th>Product Name</th>
+                <th>Price / Unit</th>
+                <th>Unit</th>
+                <th>Suppliers</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="products-body">
+              <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="product-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Add Product</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid form-grid-2">
+        <div class="form-group full">
+          <label>Product Name *</label>
+          <input type="text" id="f-name" class="form-control" placeholder="e.g. Full Cream Milk" />
+        </div>
+        <div class="form-group">
+          <label>Price per Unit (₹) *</label>
+          <input type="number" id="f-price" class="form-control" placeholder="e.g. 28" min="0" step="0.5" />
+        </div>
+        <div class="form-group">
+          <label>Unit *</label>
+          <input type="text" id="f-unit" class="form-control" placeholder="e.g. Litre, Kg, 250g" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('product-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProduct()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  Auth.requireAuth('admin');
+  Auth.initSidebarUser();
+  Auth.initMobileSidebar();
+  buildAdminSidebar('admin-products.html');
+  initModalClosers();
+
+  let allProducts = [], allSuppliers = [], supplierProducts = [];
+  let editingId = null;
+
+  const PRODUCT_EMOJIS = { 'Milk': '🥛', 'Curd': '🍶', 'Paneer': '🧀', 'Spinach': '🥬', 'Tomato': '🍅', 'Carrot': '🥕', 'Beans': '🫛' };
+  function productEmoji(name) {
+    for (const [k,v] of Object.entries(PRODUCT_EMOJIS)) if (name.includes(k)) return v;
+    return '🛒';
+  }
+
+  async function load() {
+    [allProducts, allSuppliers, supplierProducts] = await Promise.all([
+      API.products.getAll(), API.suppliers.getAll(), API.supplierProducts.getAll()
+    ]);
+    renderTable(allProducts);
+  }
+
+  function getProductSuppliers(pid) {
+    return supplierProducts.filter(sp => sp.Product_ID === pid).map(sp => allSuppliers.find(s => s.Supplier_ID === sp.Supplier_ID)?.Supplier_Name).filter(Boolean);
+  }
+
+  function renderTable(data) {
+    const body = document.getElementById('products-body');
+    if (!data.length) {
+      body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🛒</div><div class="empty-title">No products found</div></div></td></tr>';
+      return;
+    }
+    body.innerHTML = data.map(p => {
+      const supps = getProductSuppliers(p.Product_ID);
+      return `<tr>
+        <td class="td-muted">${p.Product_ID}</td>
+        <td><span style="font-size:18px;margin-right:6px">${productEmoji(p.Product_Name)}</span><strong>${p.Product_Name}</strong></td>
+        <td><span class="fw-700" style="color:var(--primary)">₹${p.Price_per_unit}</span></td>
+        <td><span class="badge badge-muted">${p.Unit}</span></td>
+        <td>${supps.map(s => `<span class="badge badge-info" style="margin:2px">${s}</span>`).join('') || '<span class="td-muted">-</span>'}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-xs" onclick="editProduct('${p.Product_ID}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteProduct('${p.Product_ID}')">🗑️</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filterTable() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    renderTable(allProducts.filter(p => !q || p.Product_Name.toLowerCase().includes(q) || p.Unit.toLowerCase().includes(q)));
+  }
+
+  function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Product';
+    ['f-name','f-price','f-unit'].forEach(id => document.getElementById(id).value = '');
+    openModal('product-modal');
+  }
+
+  function editProduct(id) {
+    const p = allProducts.find(x => x.Product_ID === id);
+    if (!p) return;
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit Product';
+    document.getElementById('f-name').value  = p.Product_Name;
+    document.getElementById('f-price').value = p.Price_per_unit;
+    document.getElementById('f-unit').value  = p.Unit;
+    openModal('product-modal');
+  }
+
+  async function saveProduct() {
+    const name  = document.getElementById('f-name').value.trim();
+    const price = parseFloat(document.getElementById('f-price').value);
+    const unit  = document.getElementById('f-unit').value.trim();
+    if (!name || isNaN(price) || !unit) { showToast('Please fill all required fields', 'error'); return; }
+    const data = { Product_Name: name, Price_per_unit: price, Unit: unit };
+    if (editingId) {
+      await API.products.update(editingId, data);
+      showToast('Product updated!');
+    } else {
+      await API.products.create(data);
+      showToast('Product added!');
+    }
+    closeModal('product-modal');
+    load();
+  }
+
+  async function deleteProduct(id) {
+    if (!confirmAction('Delete this product?')) return;
+    await API.products.delete(id);
+    showToast('Product deleted', 'warning');
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

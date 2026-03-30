@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Deliveries — FreshDeliver</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">P</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Customer</div><div class="user-role" id="sidebar-user-role">Customer</div></div>
+    </div>
+    <nav class="sidebar-nav" id="customer-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">My Deliveries</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Deliveries</div>
+          <div class="page-subtitle">Track your past and upcoming deliveries</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:24px">
+        <div class="stat-card" style="--card-accent:var(--success)"><div class="stat-header"><span class="stat-label">Delivered</span><div class="stat-icon">✅</div></div><div class="stat-value" id="d-delivered">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--warning)"><div class="stat-header"><span class="stat-label">Pending</span><div class="stat-icon">⏳</div></div><div class="stat-value" id="d-pending">—</div></div>
+        <div class="stat-card" style="--card-accent:var(--danger)"><div class="stat-header"><span class="stat-label">Failed</span><div class="stat-icon">❌</div></div><div class="stat-value" id="d-failed">—</div></div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search delivery or order ID…" oninput="filterTable()" />
+          </div>
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Status</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Pending">Pending</option>
+            <option value="Failed">Failed</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Delivery ID</th>
+                <th>Order ID</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Delivery Person</th>
+              </tr>
+            </thead>
+            <tbody id="deliveries-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/customer.js"></script>
+<script>
+  const session = Auth.requireAuth('customer');
+  let allDeliveries = [], allDPs = [];
+
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildCustomerSidebar('customer-deliveries.html');
+
+    async function load() {
+      [allDeliveries, allDPs] = await Promise.all([
+        API.deliveries.getByCustomer(session.id),
+        API.deliveryPersons.getAll()
+      ]);
+      document.getElementById('d-delivered').textContent = allDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
+      document.getElementById('d-pending').textContent   = allDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
+      document.getElementById('d-failed').textContent    = allDeliveries.filter(d => d.Delivery_Status === 'Failed').length;
+      renderTable(allDeliveries);
+    }
+
+    const dpMap = () => Object.fromEntries(allDPs.map(d => [d.DeliveryPerson_ID, d.Name]));
+
+    function renderTable(data) {
+      const body = document.getElementById('deliveries-body');
+      const dm = dpMap();
+      if (!data.length) {
+        body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🚚</div><div class="empty-title">No deliveries yet</div><div class="empty-desc">Your deliveries will appear here.</div></div></td></tr>';
+        return;
+      }
+      body.innerHTML = [...data].sort((a,b) => b.Delivery_date.localeCompare(a.Delivery_date)).map(d => `
+        <tr>
+          <td class="fw-700">${d.Delivery_ID}</td>
+          <td>${d.Order_ID}</td>
+          <td>${formatDate(d.Delivery_date)}</td>
+          <td>${statusBadge(d.Delivery_Status)}</td>
+          <td>${dm[d.DeliveryPerson_ID] || '—'}</td>
+        </tr>`).join('');
+    }
+
+    function filterTable() {
+      const q  = document.getElementById('search-input').value.toLowerCase();
+      const st = document.getElementById('status-filter').value;
+      renderTable(allDeliveries.filter(d =>
+        (!q || d.Delivery_ID.toLowerCase().includes(q) || d.Order_ID.toLowerCase().includes(q)) &&
+        (!st || d.Delivery_Status === st)
+      ));
+    }
+
+    window.filterTable = filterTable;
+    load();
+  }
+</script>
+</body>
+</html>

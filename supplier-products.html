@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Products — Supplier Portal</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🏭</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">S</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Supplier</div><div class="user-role" id="sidebar-user-role">Supplier</div></div>
+    </div>
+    <nav class="sidebar-nav" id="supplier-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">My Products</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">My Products</div>
+          <div class="page-subtitle">View your product catalog and current stock levels</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search products..." oninput="filterTable()" />
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Product ID</th>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Unit</th>
+                <th>Price</th>
+                <th>Current Stock</th>
+              </tr>
+            </thead>
+            <tbody id="products-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  const SUPPLIER_NAV = [
+    { section: 'Portal', items: [
+      { icon: '🏠', label: 'Dashboard',    href: 'supplier-dashboard.html' },
+      { icon: '📦', label: 'My Products',  href: 'supplier-products.html'  },
+      { icon: '📋', label: 'Orders',       href: 'supplier-orders.html'    },
+    ]}
+  ];
+
+  function buildSupplierSidebar(activePage) {
+    const nav = document.getElementById('supplier-nav');
+    if (!nav) return;
+    nav.innerHTML = SUPPLIER_NAV.map(section => `
+      <div class="nav-section">
+        <div class="nav-section-label">${section.section}</div>
+        ${section.items.map(item => `
+          <a href="${item.href}" class="nav-item ${item.href === activePage ? 'active' : ''}">
+            <span class="nav-icon">${item.icon}</span>
+            <span>${item.label}</span>
+          </a>`).join('')}
+      </div>`).join('');
+  }
+
+  const session = Auth.requireAuth('supplier');
+  let allMyProducts = [];
+  let allInv = [];
+
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildSupplierSidebar('supplier-products.html');
+
+    async function load() {
+      const allProducts = await API.products.getAll();
+      allInv = await API.inventory.getAll();
+      allMyProducts = allProducts.filter(p => p.Supplier_ID === session.id);
+      renderTable(allMyProducts);
+    }
+
+    function renderTable(data) {
+      const body = document.getElementById('products-body');
+      const invMap = Object.fromEntries(allInv.map(i => [i.Product_ID, i.Available_quantity]));
+      
+      if (!data.length) {
+        body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No products found</div></div></td></tr>';
+        return;
+      }
+      
+      body.innerHTML = data.map(p => {
+        const stock = invMap[p.Product_ID] ?? '—';
+        const stockBadge = (stock !== '—' && stock < 50) 
+            ? '<span class="badge badge-warning" style="margin-left:8px">Low Stock</span>' 
+            : '<span class="badge badge-success" style="margin-left:8px">In Stock</span>';
+            
+        return `<tr>
+          <td class="fw-700">${p.Product_ID}</td>
+          <td><strong>${p.Product_Name}</strong></td>
+          <td><span class="badge badge-muted">${p.Category || 'General'}</span></td>
+          <td>${p.Unit}</td>
+          <td class="fw-700" style="color:var(--primary)">${formatCurrency(p.Price)}</td>
+          <td>${stock} ${stockBadge}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function filterTable() {
+      const q = document.getElementById('search-input').value.toLowerCase();
+      renderTable(allMyProducts.filter(p => p.Product_Name.toLowerCase().includes(q) || p.Product_ID.toLowerCase().includes(q)));
+    }
+
+    window.filterTable = filterTable;
+    load();
+  }
+</script>
+</body>
+</html>

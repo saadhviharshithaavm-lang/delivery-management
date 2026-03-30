@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orders — FreshDeliver Admin</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">A</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Admin</div><div class="user-role" id="sidebar-user-role">Administrator</div></div>
+    </div>
+    <nav class="sidebar-nav" id="admin-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Order Management</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Orders</div>
+          <div class="page-subtitle">All customer orders and their current status</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search order ID or customer…" oninput="filterTable()" />
+          </div>
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Processing">Processing</option>
+            <option value="Delivered">Delivered</option>
+          </select>
+          <input type="date" class="filter-select" id="date-filter" onchange="filterTable()" title="Filter by date" />
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Order Date</th>
+                <th>Items</th>
+                <th>Total Amount</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="orders-body">
+              <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Order Details Modal -->
+<div class="modal-overlay" id="order-detail-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="detail-title">Order Details</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body" id="order-detail-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('order-detail-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Status Modal -->
+<div class="modal-overlay" id="edit-order-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Update Order Status</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Order Status</label>
+        <select id="f-order-status" class="form-control">
+          <option value="Pending">Pending</option>
+          <option value="Processing">Processing</option>
+          <option value="Delivered">Delivered</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('edit-order-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveOrderStatus()">💾 Update</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  Auth.requireAuth('admin');
+  Auth.initSidebarUser();
+  Auth.initMobileSidebar();
+  buildAdminSidebar('admin-orders.html');
+  initModalClosers();
+
+  let allOrders = [], allCustomers = [], allItems = [], allProducts = [];
+  let editingId = null;
+
+  async function load() {
+    [allOrders, allCustomers, allItems, allProducts] = await Promise.all([
+      API.orders.getAll(), API.customers.getAll(),
+      API.orderItems.getAll(), API.products.getAll()
+    ]);
+    renderTable(allOrders);
+  }
+
+  const custMap = () => Object.fromEntries(allCustomers.map(c => [c.Customer_ID, c.Name]));
+  const prodMap = () => Object.fromEntries(allProducts.map(p => [p.Product_ID, p.Product_Name]));
+
+  function getOrderItemCount(oid) { return allItems.filter(i => i.Order_ID === oid).length; }
+
+  function renderTable(data) {
+    const body = document.getElementById('orders-body');
+    const cm = custMap();
+    if (!data.length) {
+      body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No orders found</div></div></td></tr>';
+      return;
+    }
+    const sorted = [...data].sort((a,b) => b.Order_date.localeCompare(a.Order_date));
+    body.innerHTML = sorted.map(o => `
+      <tr>
+        <td class="fw-700">${o.Order_ID}</td>
+        <td>${cm[o.Customer_ID] || o.Customer_ID}</td>
+        <td>${formatDate(o.Order_date)}</td>
+        <td><span class="badge badge-muted">${getOrderItemCount(o.Order_ID)} item(s)</span></td>
+        <td class="fw-700" style="color:var(--primary)">${formatCurrency(o.Total_amount)}</td>
+        <td>${statusBadge(o.Order_status)}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-xs" onclick="viewOrder('${o.Order_ID}')">👁️ View</button>
+            <button class="btn btn-secondary btn-xs" onclick="editOrder('${o.Order_ID}','${o.Order_status}')">✏️</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }
+
+  function filterTable() {
+    const q  = document.getElementById('search-input').value.toLowerCase();
+    const st = document.getElementById('status-filter').value;
+    const dt = document.getElementById('date-filter').value;
+    const cm = custMap();
+    renderTable(allOrders.filter(o =>
+      (!q || o.Order_ID.toLowerCase().includes(q) || (cm[o.Customer_ID]||'').toLowerCase().includes(q)) &&
+      (!st || o.Order_status === st) &&
+      (!dt || o.Order_date === dt)
+    ));
+  }
+
+  async function viewOrder(oid) {
+    const order = allOrders.find(o => o.Order_ID === oid);
+    const cm = custMap(), pm = prodMap();
+    const items = allItems.filter(i => i.Order_ID === oid);
+    document.getElementById('detail-title').textContent = `Order ${oid}`;
+    document.getElementById('order-detail-body').innerHTML = `
+      <div class="info-row" style="margin-bottom:20px">
+        <div class="info-item"><div class="info-label">Customer</div><div class="info-value">${cm[order.Customer_ID]||order.Customer_ID}</div></div>
+        <div class="info-item"><div class="info-label">Order Date</div><div class="info-value">${formatDate(order.Order_date)}</div></div>
+        <div class="info-item"><div class="info-label">Status</div><div class="info-value">${statusBadge(order.Order_status)}</div></div>
+        <div class="info-item"><div class="info-label">Total</div><div class="info-value fw-700" style="color:var(--primary)">${formatCurrency(order.Total_amount)}</div></div>
+      </div>
+      <h5 style="margin-bottom:12px">Order Items</h5>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Product</th><th>Quantity</th><th>Price/Unit</th><th>Subtotal</th></tr></thead>
+          <tbody>${items.map(i => `
+            <tr>
+              <td>${pm[i.Product_ID]||i.Product_ID}</td>
+              <td>${i.Quantity}</td>
+              <td>${formatCurrency(i.Price)}</td>
+              <td class="fw-700">${formatCurrency(i.Quantity * i.Price)}</td>
+            </tr>`).join('')}
+            <tr style="background:var(--surface-2)">
+              <td colspan="3" class="fw-700 text-right">Total</td>
+              <td class="fw-700" style="color:var(--primary)">${formatCurrency(order.Total_amount)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
+    openModal('order-detail-modal');
+  }
+
+  function editOrder(id, currentStatus) {
+    editingId = id;
+    document.getElementById('f-order-status').value = currentStatus;
+    openModal('edit-order-modal');
+  }
+
+  async function saveOrderStatus() {
+    const status = document.getElementById('f-order-status').value;
+    await API.orders.update(editingId, { Order_status: status });
+    showToast('Order status updated!');
+    closeModal('edit-order-modal');
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

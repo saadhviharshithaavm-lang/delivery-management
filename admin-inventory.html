@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory — FreshDeliver Admin</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">A</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Admin</div><div class="user-role" id="sidebar-user-role">Administrator</div></div>
+    </div>
+    <nav class="sidebar-nav" id="admin-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Inventory Management</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Inventory</div>
+          <div class="page-subtitle">Track and update product stock levels</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="openAddModal()">➕ Add Inventory Record</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search product…" oninput="filterTable()" />
+          </div>
+          <select class="filter-select" id="stock-filter" onchange="filterTable()">
+            <option value="">All Stock Levels</option>
+            <option value="low">Low Stock (&lt;50)</option>
+            <option value="ok">Adequate (≥50)</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Inventory ID</th>
+                <th>Product</th>
+                <th>Available Qty</th>
+                <th>Stock Level</th>
+                <th>Last Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-body">
+              <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Inventory Modal -->
+<div class="modal-overlay" id="inventory-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Update Stock</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid form-grid-2">
+        <div class="form-group full">
+          <label>Product *</label>
+          <select id="f-product" class="form-control"></select>
+        </div>
+        <div class="form-group full">
+          <label>Available Quantity *</label>
+          <input type="number" id="f-qty" class="form-control" placeholder="e.g. 200" min="0" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('inventory-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveInventory()">💾 Update Stock</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  Auth.requireAuth('admin');
+  Auth.initSidebarUser();
+  Auth.initMobileSidebar();
+  buildAdminSidebar('admin-inventory.html');
+  initModalClosers();
+
+  let allInventory = [], allProducts = [];
+  let editingId = null;
+
+  async function load() {
+    [allInventory, allProducts] = await Promise.all([API.inventory.getAll(), API.products.getAll()]);
+    renderTable(allInventory);
+  }
+
+  function getProductName(pid) { return allProducts.find(p => p.Product_ID === pid)?.Product_Name || pid; }
+
+  function stockBadge(qty) {
+    if (qty < 25) return '<span class="badge badge-danger">Critical</span>';
+    if (qty < 50) return '<span class="badge badge-warning">Low</span>';
+    if (qty < 100) return '<span class="badge badge-info">Moderate</span>';
+    return '<span class="badge badge-success">Good</span>';
+  }
+
+  function stockBar(qty) {
+    const max = 400;
+    const pct = Math.min(100, Math.round(qty / max * 100));
+    const color = qty < 25 ? 'var(--danger)' : qty < 50 ? 'var(--warning)' : qty < 100 ? 'var(--info)' : 'var(--success)';
+    return `<div style="display:flex;align-items:center;gap:8px">
+      <div class="progress-bar" style="width:100px"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span style="font-size:.78rem;color:var(--text-muted)">${pct}%</span>
+    </div>`;
+  }
+
+  function renderTable(data) {
+    const body = document.getElementById('inventory-body');
+    if (!data.length) {
+      body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No inventory records</div></div></td></tr>';
+      return;
+    }
+    body.innerHTML = data.map(i => `
+      <tr>
+        <td class="td-muted">${i.Inventory_ID}</td>
+        <td><strong>${getProductName(i.Product_ID)}</strong></td>
+        <td><span class="fw-700" style="font-size:1.05rem">${i.Available_quantity}</span> <span class="td-muted">${allProducts.find(p=>p.Product_ID===i.Product_ID)?.Unit||''}</span></td>
+        <td>${stockBadge(i.Available_quantity)}<div style="margin-top:6px">${stockBar(i.Available_quantity)}</div></td>
+        <td>${formatDate(i.LastUpdated)}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-xs" onclick="editInventory('${i.Inventory_ID}')">✏️ Update</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteInventory('${i.Inventory_ID}')">🗑️</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }
+
+  function filterTable() {
+    const q  = document.getElementById('search-input').value.toLowerCase();
+    const sf = document.getElementById('stock-filter').value;
+    const filtered = allInventory.filter(i => {
+      const pname = getProductName(i.Product_ID).toLowerCase();
+      const matchQ = !q || pname.includes(q);
+      const matchS = !sf || (sf === 'low' ? i.Available_quantity < 50 : i.Available_quantity >= 50);
+      return matchQ && matchS;
+    });
+    renderTable(filtered);
+  }
+
+  function buildProductOptions(selectedPid = '') {
+    document.getElementById('f-product').innerHTML = allProducts.map(p =>
+      `<option value="${p.Product_ID}" ${p.Product_ID === selectedPid ? 'selected' : ''}>${p.Product_Name}</option>`
+    ).join('');
+  }
+
+  function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Inventory Record';
+    document.getElementById('f-qty').value = '';
+    buildProductOptions();
+    openModal('inventory-modal');
+  }
+
+  function editInventory(id) {
+    const inv = allInventory.find(i => i.Inventory_ID === id);
+    if (!inv) return;
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Update Stock';
+    document.getElementById('f-qty').value = inv.Available_quantity;
+    buildProductOptions(inv.Product_ID);
+    openModal('inventory-modal');
+  }
+
+  async function saveInventory() {
+    const pid = document.getElementById('f-product').value;
+    const qty = parseInt(document.getElementById('f-qty').value);
+    if (!pid || isNaN(qty) || qty < 0) { showToast('Please enter valid quantity', 'error'); return; }
+    if (editingId) {
+      await API.inventory.update(editingId, { Product_ID: pid, Available_quantity: qty });
+      showToast('Stock updated!');
+    } else {
+      await API.inventory.create({ Product_ID: pid, Available_quantity: qty });
+      showToast('Inventory record added!');
+    }
+    closeModal('inventory-modal');
+    load();
+  }
+
+  async function deleteInventory(id) {
+    if (!confirmAction('Remove this inventory record?')) return;
+    await API.inventory.delete(id);
+    showToast('Record removed', 'warning');
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

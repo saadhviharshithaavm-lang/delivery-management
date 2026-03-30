@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard — FreshDeliver</title>
+  <link rel="stylesheet" href="index.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    .welcome-banner {
+      background: linear-gradient(120deg, var(--primary) 0%, var(--primary-light) 100%);
+      border-radius: var(--radius-lg);
+      padding: 28px 32px;
+      color: white;
+      margin-bottom: 28px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 20px;
+    }
+    .welcome-banner h2 { font-size: 1.5rem; margin-bottom: 4px; }
+    .welcome-banner p { opacity: .85; font-size: .9rem; }
+    .welcome-banner .banner-emoji { font-size: 56px; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🥛</div>
+      <span class="logo-text">Fresh<span>Deliver</span></span>
+    </div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">A</div>
+      <div class="user-info">
+        <div class="user-name" id="sidebar-user-name">Admin</div>
+        <div class="user-role" id="sidebar-user-role">Administrator</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav" id="admin-nav"></nav>
+    <div class="sidebar-footer">
+      <button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button>
+    </div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <!-- Main -->
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Dashboard Overview</span>
+      <div class="topbar-actions">
+        <span style="font-size:.8rem;color:var(--text-muted)" id="topbar-date"></span>
+      </div>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <!-- Welcome Banner -->
+      <div class="welcome-banner">
+        <div>
+          <h2>Good Morning, Admin! 👋</h2>
+          <p>Here's what's happening with your delivery operations today.</p>
+        </div>
+        <div class="banner-emoji">🥛</div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card" style="--card-accent:var(--primary);--card-icon-bg:var(--primary-bg)">
+          <div class="stat-header">
+            <span class="stat-label">Total Customers</span>
+            <div class="stat-icon">👥</div>
+          </div>
+          <div class="stat-value" id="stat-customers">—</div>
+          <div class="stat-change"><span class="pos" id="stat-active-customers">—</span> active</div>
+        </div>
+        <div class="stat-card" style="--card-accent:var(--accent);--card-icon-bg:var(--accent-light)">
+          <div class="stat-header">
+            <span class="stat-label">Active Subscriptions</span>
+            <div class="stat-icon">🔄</div>
+          </div>
+          <div class="stat-value" id="stat-subs">—</div>
+          <div class="stat-change">Running today</div>
+        </div>
+        <div class="stat-card" style="--card-accent:var(--info);--card-icon-bg:var(--info-light)">
+          <div class="stat-header">
+            <span class="stat-label">Today's Deliveries</span>
+            <div class="stat-icon">🚚</div>
+          </div>
+          <div class="stat-value" id="stat-deliveries">—</div>
+          <div class="stat-change"><span class="neg" id="stat-pending">—</span> pending</div>
+        </div>
+        <div class="stat-card" style="--card-accent:var(--success);--card-icon-bg:var(--success-light)">
+          <div class="stat-header">
+            <span class="stat-label">Revenue Collected</span>
+            <div class="stat-icon">💰</div>
+          </div>
+          <div class="stat-value" id="stat-revenue">—</div>
+          <div class="stat-change"><span class="neg" id="stat-pending-pay">—</span> pending</div>
+        </div>
+      </div>
+
+      <!-- Charts + Recent Orders -->
+      <div class="dashboard-grid dashboard-grid-3" style="gap:24px">
+        <!-- Weekly Deliveries Chart -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📊 Weekly Deliveries</span>
+            <span class="badge badge-primary">Last 7 Days</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-container">
+              <canvas id="delivery-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Delivery Status Donut -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🎯 Delivery Status</span>
+          </div>
+          <div class="card-body">
+            <div class="chart-container" style="height:200px">
+              <canvas id="status-chart"></canvas>
+            </div>
+            <div id="status-legend" style="margin-top:12px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Orders + Quick Actions -->
+      <div class="dashboard-grid dashboard-grid-2" style="gap:24px;margin-top:24px">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📋 Recent Orders</span>
+            <a href="admin-orders.html" class="btn btn-secondary btn-sm">View All</a>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Customer</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="recent-orders-body">
+                <tr><td colspan="4" class="text-center text-muted" style="padding:24px">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⚡ Quick Actions</span>
+          </div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
+            <a href="admin-customers.html" class="btn btn-primary w-full" style="justify-content:center">👥 Manage Customers</a>
+            <a href="admin-orders.html" class="btn btn-secondary w-full" style="justify-content:center">📋 View All Orders</a>
+            <a href="admin-deliveries.html" class="btn btn-secondary w-full" style="justify-content:center">🚚 Manage Deliveries</a>
+            <a href="admin-inventory.html" class="btn btn-secondary w-full" style="justify-content:center">📦 Check Inventory</a>
+            <a href="admin-payments.html" class="btn btn-accent w-full" style="justify-content:center">💳 Payment Records</a>
+            <a href="admin-delivery-schedule.html" class="btn btn-secondary w-full" style="justify-content:center">📅 Delivery Schedules</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pending Deliveries -->
+      <div class="card" style="margin-top:24px">
+        <div class="card-header">
+          <span class="card-title">🚚 Pending Deliveries Today</span>
+          <a href="admin-deliveries.html" class="btn btn-secondary btn-sm">Manage</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Delivery ID</th>
+                <th>Order</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Delivery Person</th>
+              </tr>
+            </thead>
+            <tbody id="pending-deliveries-body">
+              <tr><td colspan="5" class="text-center text-muted" style="padding:24px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  const session = Auth.requireAuth('admin');
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildAdminSidebar('admin-dashboard.html');
+
+    document.getElementById('topbar-date').textContent =
+      new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+    async function loadDashboard() {
+      const stats = await API.stats.getAdminStats();
+
+      document.getElementById('stat-customers').textContent = stats.totalCustomers;
+      document.getElementById('stat-active-customers').textContent = stats.activeCustomers;
+      document.getElementById('stat-subs').textContent = stats.activeSubscriptions;
+      document.getElementById('stat-deliveries').textContent = stats.todayDeliveries;
+      document.getElementById('stat-pending').textContent = stats.pendingDeliveries;
+      document.getElementById('stat-revenue').textContent = '₹' + stats.totalRevenue.toLocaleString('en-IN');
+      document.getElementById('stat-pending-pay').textContent = '₹' + stats.pendingPayments.toLocaleString('en-IN');
+
+      // Weekly delivery chart
+      const ctx1 = document.getElementById('delivery-chart').getContext('2d');
+      new Chart(ctx1, {
+        type: 'bar',
+        data: {
+          labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+          datasets: [{
+            label: 'Deliveries',
+            data: stats.weeklyDeliveries,
+            backgroundColor: '#22a066cc',
+            borderColor: '#1a7c4e',
+            borderWidth: 2,
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: '#f0ece6' }, ticks: { color: '#9c978f' } },
+            x: { grid: { display: false }, ticks: { color: '#9c978f' } }
+          }
+        }
+      });
+
+      // Status donut
+      const allDeliveries = await API.deliveries.getAll();
+      const delivered = allDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
+      const pending   = allDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
+      const failed    = allDeliveries.filter(d => d.Delivery_Status === 'Failed').length;
+      const ctx2 = document.getElementById('status-chart').getContext('2d');
+      new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+          labels: ['Delivered','Pending','Failed'],
+          datasets: [{
+            data: [delivered, pending, failed],
+            backgroundColor: ['#10b981','#f97316','#ef4444'],
+            borderWidth: 0,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          cutout: '70%',
+          plugins: { legend: { display: false } }
+        }
+      });
+      document.getElementById('status-legend').innerHTML = `
+        <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.78rem">
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block"></span>Delivered (${delivered})</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#f97316;display:inline-block"></span>Pending (${pending})</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>Failed (${failed})</span>
+        </div>`;
+
+      // Recent orders
+      const [orders, customers] = await Promise.all([API.orders.getAll(), API.customers.getAll()]);
+      const custMap = Object.fromEntries(customers.map(c => [c.Customer_ID, c.Name]));
+      const recentOrders = [...orders].sort((a,b) => b.Order_date.localeCompare(a.Order_date)).slice(0,5);
+      document.getElementById('recent-orders-body').innerHTML = recentOrders.map(o => `
+        <tr>
+          <td><span class="fw-700">${o.Order_ID}</span></td>
+          <td>${custMap[o.Customer_ID] || o.Customer_ID}</td>
+          <td class="fw-700">${formatCurrency(o.Total_amount)}</td>
+          <td>${statusBadge(o.Order_status)}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted" style="padding:24px">No orders yet</td></tr>';
+
+      // Pending deliveries
+      const pendingDels = allDeliveries.filter(d => d.Delivery_Status === 'Pending').slice(0,5);
+      const dpAll = await API.deliveryPersons.getAll();
+      const dpMap = Object.fromEntries(dpAll.map(d => [d.DeliveryPerson_ID, d.Name]));
+      document.getElementById('pending-deliveries-body').innerHTML = pendingDels.map(d => `
+        <tr>
+          <td class="fw-700">${d.Delivery_ID}</td>
+          <td>${d.Order_ID}</td>
+          <td>${formatDate(d.Delivery_date)}</td>
+          <td>${statusBadge(d.Delivery_Status)}</td>
+          <td>${dpMap[d.DeliveryPerson_ID] || d.DeliveryPerson_ID}</td>
+        </tr>`).join('') || '<tr><td colspan="5" class="text-center text-muted" style="padding:24px">No pending deliveries</td></tr>';
+    }
+    loadDashboard();
+  }
+</script>
+</body>
+</html>

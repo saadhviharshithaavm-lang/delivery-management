@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Subscriptions — FreshDeliver</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">P</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Customer</div><div class="user-role" id="sidebar-user-role">Customer</div></div>
+    </div>
+    <nav class="sidebar-nav" id="customer-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">My Subscriptions</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">My Subscriptions</div>
+          <div class="page-subtitle">Manage your milk and vegetable delivery subscriptions</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="openAddModal()">➕ New Subscription</button>
+        </div>
+      </div>
+
+      <div id="subs-container" style="display:flex;flex-direction:column;gap:16px"></div>
+    </main>
+  </div>
+</div>
+
+<!-- New Subscription Modal -->
+<div class="modal-overlay" id="sub-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">Create New Subscription</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid form-grid-2" style="margin-bottom:18px">
+        <div class="form-group">
+          <label>Supplier *</label>
+          <select id="f-supplier" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Start Date *</label>
+          <input type="date" id="f-start" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>End Date *</label>
+          <input type="date" id="f-end" class="form-control" />
+        </div>
+      </div>
+      <h5 style="margin-bottom:12px">Select Products to Subscribe</h5>
+      <div id="product-selections" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('sub-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSubscription()">✅ Subscribe</button>
+    </div>
+  </div>
+</div>
+
+<!-- Update Status Modal -->
+<div class="modal-overlay" id="status-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Update Subscription Status</span><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <p class="mb-4" style="font-size:.875rem">Change status for subscription: <strong id="sub-id-display">-</strong></p>
+      <select id="f-status" class="form-control">
+        <option value="Active">Active</option>
+        <option value="Paused">Paused</option>
+        <option value="Cancelled">Cancelled</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('status-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveStatus()">💾 Update</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/customer.js"></script>
+<script>
+  const session = Auth.requireAuth('customer');
+  let allSubs = [], allProducts = [], allSuppliers = [], allDetails = [];
+  let updatingId = null;
+
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildCustomerSidebar('customer-subscriptions.html');
+    initModalClosers();
+
+    async function load() {
+      [allSubs, allProducts, allSuppliers, allDetails] = await Promise.all([
+        API.subscriptions.getByCustomer(session.id),
+        API.products.getAll(), API.suppliers.getAll(),
+        API.subscriptionDetails.getAll()
+      ]);
+      renderSubs();
+    }
+
+    function getSubDetails(sid) { return allDetails.filter(d => d.Subscription_ID === sid); }
+    const prodMap = () => Object.fromEntries(allProducts.map(p => [p.Product_ID, p]));
+    const suppMap = () => Object.fromEntries(allSuppliers.map(s => [s.Supplier_ID, s.Supplier_Name]));
+
+    function renderSubs() {
+      const container = document.getElementById('subs-container');
+      const pm = prodMap(), sm = suppMap();
+      if (!allSubs.length) {
+        container.innerHTML = `<div class="empty-state card" style="padding:60px"><div class="empty-icon">🔄</div><div class="empty-title">No subscriptions yet</div><div class="empty-desc">Subscribe to products to start receiving daily deliveries.</div><button class="btn btn-primary" style="margin-top:16px" onclick="openAddModal()">➕ Create Subscription</button></div>`;
+        return;
+      }
+      container.innerHTML = allSubs.map(s => {
+        const details = getSubDetails(s.Subscription_ID);
+        const colorMap = { Active:'var(--success)', Paused:'var(--warning)', Cancelled:'var(--danger)' };
+        return `<div class="card" style="border-left:4px solid ${colorMap[s.Status]||'var(--border)'}">
+          <div class="card-header">
+            <div>
+              <span class="fw-700" style="font-size:1rem">${s.Subscription_ID}</span>
+              <span style="margin-left:10px">${statusBadge(s.Status)}</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span class="td-muted" style="font-size:.78rem">${sm[s.Supplier_ID]||s.Supplier_ID}</span>
+              <button class="btn btn-secondary btn-xs" onclick="openStatusModal('${s.Subscription_ID}','${s.Status}')">✏️ Change Status</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="info-row" style="margin-bottom:14px">
+              <div class="info-item"><div class="info-label">Start Date</div><div class="info-value">${formatDate(s.Start_date)}</div></div>
+              <div class="info-item"><div class="info-label">End Date</div><div class="info-value">${formatDate(s.End_date)}</div></div>
+            </div>
+            <h5 style="margin-bottom:10px;font-size:.85rem">Subscribed Products</h5>
+            ${details.length ? `<div style="display:flex;gap:10px;flex-wrap:wrap">${details.map(d => {
+              const p = pm[d.Product_ID];
+              return p ? `<div style="padding:10px 14px;background:var(--surface-2);border-radius:var(--radius);border:1px solid var(--border);text-align:center;min-width:130px">
+                <div style="font-weight:700;font-size:.875rem">${p.Product_Name}</div>
+                <div style="font-size:.78rem;color:var(--text-muted);margin-top:3px">${d.Quantity_Per_Day} ${p.Unit}/day</div>
+                <div style="font-size:.72rem;color:var(--primary);margin-top:4px;font-weight:600">${d.Delivery_Frequency}</div>
+              </div>` : '';
+            }).join('')}</div>` : '<p class="text-muted" style="font-size:.85rem">No products added yet.</p>'}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function openStatusModal(id, currentStatus) {
+      updatingId = id;
+      document.getElementById('sub-id-display').textContent = id;
+      document.getElementById('f-status').value = currentStatus;
+      openModal('status-modal');
+    }
+
+    async function saveStatus() {
+      const status = document.getElementById('f-status').value;
+      await API.subscriptions.update(updatingId, { Status: status });
+      showToast('Subscription status updated!');
+      closeModal('status-modal');
+      load();
+    }
+
+    function openAddModal() {
+      document.getElementById('f-supplier').innerHTML = allSuppliers.map(s => `<option value="${s.Supplier_ID}">${s.Supplier_Name}</option>`).join('');
+      document.getElementById('f-start').value = new Date().toISOString().slice(0,10);
+      document.getElementById('f-end').value = '';
+      document.getElementById('product-selections').innerHTML = allProducts.map(p => `
+        <label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:var(--transition)" onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''">
+          <input type="checkbox" value="${p.Product_ID}" class="prod-check" style="width:16px;height:16px" />
+          <span style="flex:1;font-weight:600;font-size:.875rem">${p.Product_Name}</span>
+          <span class="badge badge-muted">${p.Unit}</span>
+          <input type="number" placeholder="Qty/day" min="1" value="1" style="width:80px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.82rem" class="prod-qty" />
+          <select class="prod-freq" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.82rem">
+            <option>Daily</option>
+            <option>Alternate</option>
+            <option>Weekly</option>
+          </select>
+        </label>`).join('');
+      openModal('sub-modal');
+    }
+
+    async function saveSubscription() {
+      const suppId = document.getElementById('f-supplier').value;
+      const start  = document.getElementById('f-start').value;
+      const end    = document.getElementById('f-end').value;
+      if (!start || !end) { showToast('Please select start and end dates', 'error'); return; }
+      const checkedRows = [...document.querySelectorAll('.prod-check:checked')];
+      if (!checkedRows.length) { showToast('Please select at least one product', 'error'); return; }
+      const sub = await API.subscriptions.create({ Customer_ID: session.id, Supplier_ID: suppId, Start_date: start, End_date: end, Status: 'Active' });
+      for (const cb of checkedRows) {
+        const row = cb.closest('label');
+        const qty  = parseInt(row.querySelector('.prod-qty').value) || 1;
+        const freq = row.querySelector('.prod-freq').value;
+        await API.subscriptionDetails.create({ Subscription_ID: sub.Subscription_ID, Product_ID: cb.value, Quantity_Per_Day: qty, Delivery_Frequency: freq });
+      }
+      showToast('Subscription created! 🎉');
+      closeModal('sub-modal');
+      load();
+    }
+
+    window.openStatusModal = openStatusModal;
+    window.saveStatus = saveStatus;
+    window.openAddModal = openAddModal;
+    window.saveSubscription = saveSubscription;
+    load();
+  }
+</script>
+</body>
+</html>

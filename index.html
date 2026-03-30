@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FreshDeliver — Milk & Vegetables Delivery</title>
+  <meta name="description" content="Subscribe to daily fresh milk and vegetables delivery. Manage your subscriptions, track orders, and pay digitally." />
+  <link rel="stylesheet" href="index.css" />
+  
+  <style>
+    .features-section {
+      background: var(--bg);
+      padding: 80px 60px;
+    }
+    .features-section h2 {
+      text-align: center;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .features-section .sub {
+      text-align: center;
+      color: var(--text-muted);
+      margin-bottom: 48px;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px 24px;
+      transition: var(--transition);
+      text-align: center;
+    }
+    .feature-card:hover { box-shadow: var(--shadow); transform: translateY(-3px); }
+    .feature-card .fc-icon {
+      width: 60px; height: 60px;
+      background: var(--primary-bg);
+      border-radius: var(--radius-lg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      margin: 0 auto 16px;
+    }
+    .feature-card h4 { color: var(--text-primary); margin-bottom: 8px; font-size: 1rem; }
+    .feature-card p  { font-size: .85rem; color: var(--text-muted); }
+    .stats-strip {
+      background: var(--primary);
+      padding: 36px 60px;
+      display: flex;
+      justify-content: center;
+      gap: 80px;
+      flex-wrap: wrap;
+    }
+    .stat-strip-item { text-align: center; color: white; }
+    .stat-strip-item .num { font-family: 'Outfit', sans-serif; font-size: 2.2rem; font-weight: 800; }
+    .stat-strip-item .lbl { font-size: .82rem; opacity: .8; margin-top: 2px; }
+    footer {
+      background: #0c3d25;
+      color: rgba(255,255,255,.6);
+      text-align: center;
+      padding: 24px;
+      font-size: .82rem;
+    }
+    footer strong { color: white; }
+    .demo-hint {
+      background: var(--accent-light);
+      border: 1px solid #fde68a;
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: .82rem;
+      color: #92400e;
+      margin-bottom: 16px;
+    }
+    .demo-hint strong { display: block; margin-bottom: 4px; font-size: .84rem; }
+  </style>
+</head>
+<body>
+
+<!-- ── Landing Wrapper ── -->
+<div class="landing">
+  <!-- Nav -->
+  <nav class="landing-nav">
+    <div class="logo">
+      <div class="logo-icon">🥛</div>
+      <span class="logo-text">Fresh<span>Deliver</span></span>
+    </div>
+    <div style="display:flex;gap:12px">
+      <a href="#login" class="btn btn-secondary" style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:white">Login</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-badge">🌿 Fresh · Local · Reliable</div>
+      <h1 class="hero-title">
+        Daily Fresh <span>Milk & Vegetables</span><br/>Delivered to Your Door
+      </h1>
+      <p class="hero-desc">
+        Subscribe once, receive daily. Our smart delivery system ensures your household gets the freshest milk and vegetables every morning — no phone calls, no hassles.
+      </p>
+      <div class="hero-btns">
+        <a href="#login" class="btn-hero-primary">🚀 Get Started Free</a>
+        <a href="#features" class="btn-hero-secondary">✨ See Features</a>
+      </div>
+      <div class="hero-features">
+        <div class="hero-feature"><span>✅</span> Auto-subscription</div>
+        <div class="hero-feature"><span>📦</span> Real-time tracking</div>
+        <div class="hero-feature"><span>💳</span> Digital payments</div>
+      </div>
+    </div>
+
+    <!-- Login Card -->
+    <div class="login-card animate-scaleIn" id="login">
+      <h2>Welcome Back!</h2>
+      <p>Sign in to manage your deliveries & subscriptions</p>
+
+      <div class="demo-hint">
+        <strong>🎯 Demo Credentials</strong>
+        Admin: <code>admin</code> / <code>admin123</code>&nbsp;&nbsp;
+        Supplier: <code>nandini</code> / <code>supp123</code><br/>
+        Customer: <code>priya</code> / <code>pass123</code>&nbsp;&nbsp;
+        Delivery: <code>raju</code> / <code>del123</code>
+      </div>
+
+      <div class="role-tabs" id="role-tabs">
+        <!-- div class="role-tab active" data-role="admin" onclick="selectRole('admin', this)">🔑 Admin</div>
+        <div class="role-tab" data-role="customer" onclick="selectRole('customer', this)">👤 Customer</div>
+        <div class="role-tab" data-role="supplier" onclick="selectRole('supplier', this)">🏭 Supplier</div>
+        <div class="role-tab" data-role="delivery" onclick="selectRole('delivery', this)">🚚 Delivery</div -->
+
+        <div class="role-tab active" data-role="admin" >🔑 Admin</div>
+        <div class="role-tab" data-role="customer">👤 Customer</div>
+        <div class="role-tab" data-role="supplier">🏭 Supplier</div>
+        <div class="role-tab" data-role="delivery">🚚 Delivery</div>
+
+        </div>
+
+      <form class="login-form" id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" class="form-control" placeholder="Enter username" value="admin" required />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" class="form-control" placeholder="Enter password" value="admin123" required />
+        </div>
+        <div id="login-error" style="color:var(--danger);font-size:.82rem;display:none;"></div>
+        <button type="submit" class="btn-login" id="login-btn">Sign In →</button>
+      </form>
+
+      <p style="margin-top:16px;font-size:.78rem;text-align:center;color:var(--text-muted);">
+        Demo system — no real account needed
+      </p>
+    </div>
+  </section>
+</div>
+
+<!-- ── Features ── -->
+<section class="features-section" id="features">
+  <h2>Everything You Need</h2>
+  <p class="sub">A complete platform for customers and service providers</p>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="fc-icon">📋</div>
+      <h4>Smart Subscriptions</h4>
+      <p>Define products, quantities, and delivery frequency. Pause or cancel anytime.</p>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon">🚚</div>
+      <h4>Delivery Tracking</h4>
+      <p>Real-time status updates on every delivery — Pending, Delivered, or Failed.</p>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon">💰</div>
+      <h4>Digital Payments</h4>
+      <p>UPI, card, or cash payments. Complete transaction history at your fingertips.</p>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon">📦</div>
+      <h4>Inventory Management</h4>
+      <p>Admins track stock levels, get low-stock alerts, and update quantities.</p>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon">🧑‍🤝‍🧑</div>
+      <h4>Supplier Network</h4>
+      <p>Manage multiple suppliers and their product associations efficiently.</p>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon">📅</div>
+      <h4>Delivery Scheduling</h4>
+      <p>Schedule deliveries with time slots. Assign personnel and track coverage.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Stats Strip ── -->
+<div class="stats-strip">
+  <div class="stat-strip-item"><div class="num">500+</div><div class="lbl">Happy Customers</div></div>
+  <div class="stat-strip-item"><div class="num">1200+</div><div class="lbl">Daily Deliveries</div></div>
+  <div class="stat-strip-item"><div class="num">8</div><div class="lbl">Product Categories</div></div>
+  <div class="stat-strip-item"><div class="num">99.2%</div><div class="lbl">On-time Delivery</div></div>
+</div>
+
+<footer>
+  <strong>FreshDeliver</strong> — Milk & Fresh Vegetables Delivery Management System &nbsp;|&nbsp; DBMS Project 2026
+</footer>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  let selectedRole = 'admin';
+  const CREDENTIALS = {
+    admin:    { u: 'admin',    p: 'admin123' },
+    customer: { u: 'priya',   p: 'pass123'  },
+    supplier: { u: 'nandini', p: 'supp123'  },
+    delivery: { u: 'raju',    p: 'del123'   },
+  };
+  const ROLE_LABELS = { admin:'Admin Portal', customer:'Customer Portal', supplier:'Supplier Portal', delivery:'Delivery Agent Portal' };
+
+
+  function selectRole(role, el) {
+    selectedRole = role;
+    document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    const creds = CREDENTIALS[role] || {};
+    document.getElementById('username').value = creds.u || '';
+    document.getElementById('password').value = creds.p || '';
+    const lbl = document.querySelector('.login-card h2');
+    if (lbl) lbl.textContent = '👋 ' + ROLE_LABELS[role];
+  }
+
+  const ROLE_HOME = {
+    admin:    'admin-dashboard.html',
+    customer: 'customer-dashboard.html',
+    supplier: 'supplier-dashboard.html',
+    delivery: 'delivery-dashboard.html',
+  };
+  
+
+  function handleLogin(e) {
+    e.preventDefault();
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const btn = document.getElementById('login-btn');
+    const errEl = document.getElementById('login-error');
+
+    btn.textContent = 'Signing in…';
+    btn.disabled = true;
+    errEl.style.display = 'none';
+
+    setTimeout(() => {
+      if (typeof Auth === 'undefined') {
+        errEl.textContent = '⚠️ Authentication system not loaded. Please refresh the page.';
+        errEl.style.display = 'block';
+        btn.textContent = 'Sign In →';
+        btn.disabled = false;
+        return;
+      }
+      const result = Auth.login(username, password);
+      if (result.success) {
+        if (typeof showToast === 'function') {
+          showToast('Login successful! Redirecting…', 'success');
+        }
+        setTimeout(() => {
+          window.location.href = ROLE_HOME[result.session.role] || 'index.html';
+        }, 600);
+      } else {
+        errEl.textContent = '⚠️ ' + result.error;
+        errEl.style.display = 'block';
+        btn.textContent = 'Sign In →';
+        btn.disabled = false;
+      }
+    }, 400);
+  }
+
+  // If already logged in, redirect
+  if (typeof Auth !== 'undefined') {
+    const session = Auth.getSession();
+    if (session) {
+      window.location.href = ROLE_HOME[session.role] || 'index.html';
+    }
+  }
+
+    document.addEventListener('DOMContentLoaded', function() {
+    const tabs = document.querySelectorAll('.role-tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', function() {
+        const role = this.getAttribute('data-role');
+        selectRole(role, this);
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

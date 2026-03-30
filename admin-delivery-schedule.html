@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delivery Schedule — FreshDeliver Admin</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🥛</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">A</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Admin</div><div class="user-role" id="sidebar-user-role">Administrator</div></div>
+    </div>
+    <nav class="sidebar-nav" id="admin-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">Delivery Schedules</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Delivery Schedules</div>
+          <div class="page-subtitle">Plan and manage delivery time slots for all orders</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="openAddModal()">➕ Add Schedule</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>🔍</span>
+            <input type="text" id="search-input" placeholder="Search schedule or delivery ID…" oninput="filterTable()" />
+          </div>
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Completed">Completed</option>
+            <option value="Failed">Failed</option>
+          </select>
+          <input type="date" class="filter-select" id="date-filter" onchange="filterTable()" title="Filter by date" />
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Schedule ID</th>
+                <th>Delivery ID</th>
+                <th>Scheduled Date</th>
+                <th>Time Slot</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="schedule-body">
+              <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Schedule Modal -->
+<div class="modal-overlay" id="sch-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Add Schedule</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Delivery *</label>
+          <select id="f-delivery" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>Scheduled Date *</label>
+          <input type="date" id="f-date" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>Time Slot *</label>
+          <select id="f-slot" class="form-control">
+            <option value="06:00 - 08:00">06:00 - 08:00 (Early Morning)</option>
+            <option value="06:30 - 08:30">06:30 - 08:30</option>
+            <option value="07:00 - 09:00">07:00 - 09:00 (Morning)</option>
+            <option value="08:00 - 10:00">08:00 - 10:00</option>
+            <option value="10:00 - 12:00">10:00 - 12:00 (Forenoon)</option>
+            <option value="16:00 - 18:00">16:00 - 18:00 (Evening)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="f-status" class="form-control">
+            <option value="Pending">Pending</option>
+            <option value="Completed">Completed</option>
+            <option value="Failed">Failed</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('sch-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSchedule()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script>
+  Auth.requireAuth('admin');
+  Auth.initSidebarUser();
+  Auth.initMobileSidebar();
+  buildAdminSidebar('admin-delivery-schedule.html');
+  initModalClosers();
+
+  let allSchedules = [], allDeliveries = [];
+  let editingId = null;
+
+  async function load() {
+    [allSchedules, allDeliveries] = await Promise.all([
+      API.deliverySchedules.getAll(), API.deliveries.getAll()
+    ]);
+    renderTable(allSchedules);
+  }
+
+  function renderTable(data) {
+    const body = document.getElementById('schedule-body');
+    if (!data.length) {
+      body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No schedules found</div></div></td></tr>';
+      return;
+    }
+    body.innerHTML = [...data].sort((a,b) => b.Scheduled_date.localeCompare(a.Scheduled_date)).map(s => `
+      <tr>
+        <td class="fw-700">${s.Schedule_ID}</td>
+        <td>${s.Delivery_ID}</td>
+        <td>${formatDate(s.Scheduled_date)}</td>
+        <td><span class="badge badge-info">🕐 ${s.Time_slot}</span></td>
+        <td>${statusBadge(s.Schedule_status)}</td>
+        <td>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-xs" onclick="editSchedule('${s.Schedule_ID}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteSchedule('${s.Schedule_ID}')">🗑️</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }
+
+  function filterTable() {
+    const q  = document.getElementById('search-input').value.toLowerCase();
+    const st = document.getElementById('status-filter').value;
+    const dt = document.getElementById('date-filter').value;
+    renderTable(allSchedules.filter(s =>
+      (!q || s.Schedule_ID.toLowerCase().includes(q) || s.Delivery_ID.toLowerCase().includes(q)) &&
+      (!st || s.Schedule_status === st) &&
+      (!dt || s.Scheduled_date === dt)
+    ));
+  }
+
+  function populateDeliveries() {
+    document.getElementById('f-delivery').innerHTML = allDeliveries.map(d =>
+      `<option value="${d.Delivery_ID}">${d.Delivery_ID} — ${d.Order_ID} (${d.Delivery_Status})</option>`
+    ).join('');
+  }
+
+  function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Schedule';
+    populateDeliveries();
+    document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+    document.getElementById('f-slot').value = '06:00 - 08:00';
+    document.getElementById('f-status').value = 'Pending';
+    openModal('sch-modal');
+  }
+
+  function editSchedule(id) {
+    const s = allSchedules.find(x => x.Schedule_ID === id);
+    if (!s) return;
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit Schedule';
+    populateDeliveries();
+    document.getElementById('f-delivery').value = s.Delivery_ID;
+    document.getElementById('f-date').value     = s.Scheduled_date;
+    document.getElementById('f-slot').value     = s.Time_slot;
+    document.getElementById('f-status').value   = s.Schedule_status;
+    openModal('sch-modal');
+  }
+
+  async function saveSchedule() {
+    const data = {
+      Delivery_ID:     document.getElementById('f-delivery').value,
+      Scheduled_date:  document.getElementById('f-date').value,
+      Time_slot:       document.getElementById('f-slot').value,
+      Schedule_status: document.getElementById('f-status').value,
+    };
+    if (!data.Scheduled_date) { showToast('Please select a date', 'error'); return; }
+    if (editingId) {
+      await API.deliverySchedules.update(editingId, data);
+      showToast('Schedule updated!');
+    } else {
+      await API.deliverySchedules.create(data);
+      showToast('Schedule created!');
+    }
+    closeModal('sch-modal');
+    load();
+  }
+
+  async function deleteSchedule(id) {
+    if (!confirmAction('Delete this schedule?')) return;
+    await API.deliverySchedules.delete(id);
+    showToast('Schedule deleted', 'warning');
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

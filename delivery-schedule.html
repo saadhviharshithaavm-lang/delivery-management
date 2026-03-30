@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Schedule — Delivery Portal</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">🚚</div><span class="logo-text">Fresh<span>Deliver</span></span></div>
+    <div class="sidebar-user">
+      <div class="avatar" id="sidebar-user-init">D</div>
+      <div class="user-info"><div class="user-name" id="sidebar-user-name">Agent</div><div class="user-role" id="sidebar-user-role">Delivery Agent</div></div>
+    </div>
+    <nav class="sidebar-nav" id="delivery-nav"></nav>
+    <div class="sidebar-footer"><button class="btn-logout" onclick="Auth.logout()">🚪 <span>Sign Out</span></button></div>
+  </aside>
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="hamburger" id="sidebar-toggle">☰</button>
+      <span class="topbar-title">My Schedule</span>
+    </header>
+
+    <main class="page-content animate-fadeIn">
+      <div class="page-header">
+        <div class="page-header-info">
+          <div class="page-title">Assigned Schedule</div>
+          <div class="page-subtitle">View your daily time slots and routing assignments</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-toolbar">
+          <select class="filter-select" id="date-filter" onchange="filterTable()">
+            <option value="">All Upcoming</option>
+            <option value="Today">Today</option>
+            <option value="Tomorrow">Tomorrow</option>
+          </select>
+          <select class="filter-select" id="status-filter" onchange="filterTable()">
+            <option value="">All Statuses</option>
+            <option value="Assigned">Assigned</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Schedule ID</th>
+                <th>Delivery ID</th>
+                <th>Order ID</th>
+                <th>Time Slot</th>
+                <th>Expected Date</th>
+                <th>Schedule Status</th>
+              </tr>
+            </thead>
+            <tbody id="schedule-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  const DELIVERY_NAV = [
+    { section: 'My Portal', items: [
+      { icon: '🏠', label: 'Dashboard',        href: 'delivery-dashboard.html' },
+      { icon: '📅', label: 'My Schedule',      href: 'delivery-schedule.html'  },
+      { icon: '🗺️', label: 'My Area',           href: 'delivery-area.html'      },
+    ]}
+  ];
+
+  function buildDeliveryNav(activePage) {
+    const nav = document.getElementById('delivery-nav');
+    if (!nav) return;
+    nav.innerHTML = DELIVERY_NAV.map(section => `
+      <div class="nav-section">
+        <div class="nav-section-label">${section.section}</div>
+        ${section.items.map(item => `
+          <a href="${item.href}" class="nav-item ${item.href === activePage ? 'active' : ''}">
+            <span class="nav-icon">${item.icon}</span>
+            <span>${item.label}</span>
+          </a>`).join('')}
+      </div>`).join('');
+  }
+
+  const session = Auth.requireAuth('delivery');
+  let scheduleData = [];
+
+  if (session) {
+    Auth.initSidebarUser();
+    Auth.initMobileSidebar();
+    buildDeliveryNav('delivery-schedule.html');
+
+    async function load() {
+      const [allSchedules, allDeliveries] = await Promise.all([
+        API.deliverySchedules.getAll(),
+        API.deliveries.getAll()
+      ]);
+
+      const myDeliveryIDs = allDeliveries.filter(d => d.DeliveryPerson_ID === session.id).map(d => d.Delivery_ID);
+      const myDeliveries = allDeliveries.filter(d => d.DeliveryPerson_ID === session.id);
+      
+      const mySchedules = allSchedules.filter(s => myDeliveryIDs.includes(s.Delivery_ID));
+      
+      scheduleData = mySchedules.map(s => {
+        const d = myDeliveries.find(x => x.Delivery_ID === s.Delivery_ID) || {};
+        return {
+          Schedule_ID: s.Schedule_ID,
+          Delivery_ID: s.Delivery_ID,
+          Order_ID: d.Order_ID || 'Unknown',
+          Time_slot: s.Time_slot,
+          Date: d.Delivery_date,
+          Status: s.Status
+        };
+      }).sort((a,b) => (a.Date || '').localeCompare(b.Date || ''));
+
+      renderTable(scheduleData);
+    }
+
+    function renderTable(data) {
+      const body = document.getElementById('schedule-body');
+      if (!data.length) {
+        body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">No schedule assigned</div></div></td></tr>';
+        return;
+      }
+      
+      body.innerHTML = data.map(s => {
+        let badgeClass = 'badge-muted';
+        if (s.Status === 'Assigned') badgeClass = 'badge-info';
+        if (s.Status === 'In Progress') badgeClass = 'badge-warning';
+        if (s.Status === 'Completed') badgeClass = 'badge-success';
+
+        return `<tr>
+          <td class="fw-700">${s.Schedule_ID}</td>
+          <td>${s.Delivery_ID}</td>
+          <td>${s.Order_ID}</td>
+          <td><strong>${s.Time_slot}</strong></td>
+          <td>${s.Date ? formatDate(s.Date) : '—'}</td>
+          <td><span class="badge ${badgeClass}">${s.Status}</span></td>
+        </tr>`;
+      }).join('');
+    }
+
+    function filterTable() {
+      const df = document.getElementById('date-filter').value;
+      const sf = document.getElementById('status-filter').value;
+      const today = new Date().toISOString().slice(0, 10);
+      const tomorrowDate = new Date();
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const tomorrow = tomorrowDate.toISOString().slice(0, 10);
+
+      renderTable(scheduleData.filter(s => {
+        let dateMatch = true;
+        if (df === 'Today') dateMatch = (s.Date === today);
+        if (df === 'Tomorrow') dateMatch = (s.Date === tomorrow);
+        
+        let statusMatch = true;
+        if (sf) statusMatch = (s.Status === sf);
+        
+        return dateMatch && statusMatch;
+      }));
+    }
+
+    window.filterTable = filterTable;
+    load();
+  }
+</script>
+</body>
+</html>
