@@ -87,6 +87,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/customer.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const session = Auth.requireAuth('customer');
   if (session) {
@@ -97,19 +98,30 @@
 
     async function load() {
       const cid = session.id;
-      const [stats, orders, deliveries, subs, allProducts, subDetails] = await Promise.all([
-        API.stats.getCustomerStats(cid),
-        API.orders.getByCustomer(cid),
-        API.deliveries.getByCustomer(cid),
-        API.subscriptions.getByCustomer(cid),
-        API.products.getAll(),
-        API.subscriptionDetails.getAll()
+      const [allOrders, allDeliveries, allSubs, allProducts, subDetails, allPayments] = await Promise.all([
+        OrderAPI.getAll(),
+        DeliveryAPI.getAll(),
+        SubscriptionAPI.getAll(),
+        ProductAPI.getAll(),
+        SubscriptionDetailAPI.getAll(),
+        PaymentAPI.getAll()
       ]);
 
-      document.getElementById('c-subs').textContent       = stats.activeSubscriptions;
-      document.getElementById('c-orders').textContent     = stats.totalOrders;
-      document.getElementById('c-delivered').textContent  = stats.deliveredCount;
-      document.getElementById('c-pending-pay').textContent = '₹' + stats.pendingAmount;
+      const orders = allOrders.filter(o => o.Customer_ID == cid);
+      const deliveries = allDeliveries.filter(d => orders.some(o => o.Order_ID == d.Order_ID));
+      const subs = allSubs.filter(s => s.Customer_ID == cid);
+
+      // Compute stats from raw data
+      const activeSubscriptions = subs.filter(s => s.Status === 'Active').length;
+      const totalOrders = orders.length;
+      const deliveredCount = deliveries.filter(d => d.Delivery_Status === 'Delivered').length;
+      const paidOrderIds = allPayments.map(p => p.Order_ID);
+      const pendingAmount = orders.filter(o => !paidOrderIds.includes(o.Order_ID)).reduce((sum, o) => sum + (parseFloat(o.Total_amount) || 0), 0);
+
+      document.getElementById('c-subs').textContent       = activeSubscriptions;
+      document.getElementById('c-orders').textContent     = totalOrders;
+      document.getElementById('c-delivered').textContent  = deliveredCount;
+      document.getElementById('c-pending-pay').textContent = '₹' + pendingAmount;
 
       // Upcoming deliveries
       const upcoming = deliveries.filter(d => d.Delivery_Status === 'Pending').slice(0,3);

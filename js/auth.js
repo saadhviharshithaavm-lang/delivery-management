@@ -33,6 +33,34 @@ const DEMO_ACCOUNTS = {
   ],
 };
 
+function normalizeLoginKey(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function buildSession(account) {
+  const session = {
+    id: account.Customer_ID || account.Supplier_ID || account.DeliveryPerson_ID || account.id,
+    role: account.role,
+    name: account.Name || account.Supplier_Name || account.name,
+    loginTime: Date.now(),
+  };
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
+async function loginBackend(username, password, role = 'admin') {
+  if (typeof AuthAPI === 'undefined') {
+    return { success: false, error: 'Backend API client is not loaded.' };
+  }
+
+  try {
+    const account = await AuthAPI.login({ User_Name: username, Password: password, Role: role });
+    return { success: true, session: buildSession(account) };
+  } catch (error) {
+    return { success: false, error: error.message || 'Invalid credentials' };
+  }
+}
+
 function login(usernameOrRole, password) {
   // Quick demo login by role
   if (usernameOrRole === 'admin_demo') {
@@ -183,6 +211,16 @@ function initModalClosers() {
 // Confirm dialog helper
 function confirmAction(msg) { return window.confirm(msg); }
 
+// Loading overlay
+function showLoading() {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.classList.add('open');
+}
+function hideLoading() {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
 // Format currency
 function formatCurrency(n) { return '₹' + Number(n).toFixed(2); }
 
@@ -210,12 +248,14 @@ function statusBadge(status) {
   return `<span class="badge ${map[status]||'badge-muted'}">${status}</span>`;
 }
 
-window.Auth = { login, logout, getSession, requireAuth, initSidebarUser, initMobileSidebar };
+window.Auth = { login, loginBackend, logout, getSession, requireAuth, initSidebarUser, initMobileSidebar };
 window.showToast = showToast;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.initModalClosers = initModalClosers;
 window.confirmAction = confirmAction;
+window.showLoading = showLoading;
+window.hideLoading = hideLoading;
 window.formatCurrency = formatCurrency;
 window.formatDate = formatDate;
 window.statusBadge = statusBadge;

@@ -16,6 +16,7 @@ async function apiRequest(endpoint, options = {}) {
   };
 
   try {
+    console.log(`API Request: ${config.method || 'GET'} ${url}`, config.body ? JSON.parse(config.body) : '');
     const response = await fetch(url, config);
 
     if (!response.ok) {
@@ -46,6 +47,13 @@ const CustomerAPI = {
   },
   async delete(id) {
     return await apiRequest(`/customers/${id}`, { method: 'DELETE' });
+  },
+};
+
+const AuthAPI = {
+  async login(data) {
+    console.log('AuthAPI.login called with', data);
+    return await apiRequest('/login', { method: 'POST', body: JSON.stringify(data) });
   },
 };
 
@@ -258,6 +266,22 @@ const DeliveryScheduleAPI = {
   },
 };
 
+// ==================== SUPPLIER PRODUCT API ====================
+const SupplierProductAPI = {
+  async getAll() {
+    return await apiRequest('/supplier-products');
+  },
+  async getBySupplier(supplierId) {
+    return await apiRequest(`/supplier-products/${supplierId}`);
+  },
+  async create(data) {
+    return await apiRequest('/supplier-products', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async delete(supplierId, productId) {
+    return await apiRequest(`/supplier-products/${supplierId}/${productId}`, { method: 'DELETE' });
+  },
+};
+
 // Export all for use in HTML pages
 window.CustomerAPI = CustomerAPI;
 window.SupplierAPI = SupplierAPI;
@@ -271,3 +295,4 @@ window.OrderItemAPI = OrderItemAPI;
 window.PaymentAPI = PaymentAPI;
 window.DeliveryAPI = DeliveryAPI;
 window.DeliveryScheduleAPI = DeliveryScheduleAPI;
+window.SupplierProductAPI = SupplierProductAPI;

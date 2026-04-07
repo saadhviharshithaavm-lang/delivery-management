@@ -96,6 +96,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/customer.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const session = Auth.requireAuth('customer');
   let allSubs = [], allProducts = [], allSuppliers = [], allDetails = [];
@@ -108,11 +109,15 @@
     initModalClosers();
 
     async function load() {
-      [allSubs, allProducts, allSuppliers, allDetails] = await Promise.all([
-        API.subscriptions.getByCustomer(session.id),
-        API.products.getAll(), API.suppliers.getAll(),
-        API.subscriptionDetails.getAll()
+      const [allSubsRaw, products, suppliers, details] = await Promise.all([
+        SubscriptionAPI.getAll(),
+        ProductAPI.getAll(), SupplierAPI.getAll(),
+        SubscriptionDetailAPI.getAll()
       ]);
+      allSubs = allSubsRaw.filter(s => s.Customer_ID == session.id);
+      allProducts = products;
+      allSuppliers = suppliers;
+      allDetails = details;
       renderSubs();
     }
 
@@ -169,7 +174,7 @@
 
     async function saveStatus() {
       const status = document.getElementById('f-status').value;
-      await API.subscriptions.update(updatingId, { Status: status });
+      await SubscriptionAPI.update(updatingId, { Status: status });
       showToast('Subscription status updated!');
       closeModal('status-modal');
       load();
@@ -201,12 +206,12 @@
       if (!start || !end) { showToast('Please select start and end dates', 'error'); return; }
       const checkedRows = [...document.querySelectorAll('.prod-check:checked')];
       if (!checkedRows.length) { showToast('Please select at least one product', 'error'); return; }
-      const sub = await API.subscriptions.create({ Customer_ID: session.id, Supplier_ID: suppId, Start_date: start, End_date: end, Status: 'Active' });
+      const sub = await SubscriptionAPI.create({ Customer_ID: session.id, Supplier_ID: suppId, Start_date: start, End_date: end, Status: 'Active' });
       for (const cb of checkedRows) {
         const row = cb.closest('label');
         const qty  = parseInt(row.querySelector('.prod-qty').value) || 1;
         const freq = row.querySelector('.prod-freq').value;
-        await API.subscriptionDetails.create({ Subscription_ID: sub.Subscription_ID, Product_ID: cb.value, Quantity_Per_Day: qty, Delivery_Frequency: freq });
+        await SubscriptionDetailAPI.create({ Subscription_ID: sub.Subscription_ID, Product_ID: cb.value, Quantity_Per_Day: qty, Delivery_Frequency: freq });
       }
       showToast('Subscription created! 🎉');
       closeModal('sub-modal');

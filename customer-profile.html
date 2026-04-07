@@ -98,6 +98,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/customer.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const session = Auth.requireAuth('customer');
   let customer = null;
@@ -108,7 +109,7 @@
     buildCustomerSidebar('customer-profile.html');
 
     async function load() {
-      customer = await API.customers.getById(session.id);
+      customer = await CustomerAPI.getById(session.id);
       if (!customer) return;
       const init = customer.Name.charAt(0).toUpperCase();
       document.getElementById('avatar-circle').textContent    = init;
@@ -142,7 +143,7 @@
       const area    = document.getElementById('f-area').value.trim();
       const address = document.getElementById('f-address').value.trim();
       if (!name || !phone || !area || !address) { showToast('Please fill all fields', 'error'); return; }
-      await API.customers.update(session.id, { Name: name, Phone_Num: phone, Area: area, Address: address });
+      await CustomerAPI.update(session.id, { Name: name, Phone_Num: phone, Area: area, Address: address });
       showToast('Profile updated successfully!');
       toggleEdit();
       load();

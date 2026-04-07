@@ -70,6 +70,7 @@
 <div id="toast-container" class="toast-container"></div>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const DELIVERY_NAV = [
     { section: 'My Portal', items: [
@@ -103,17 +104,17 @@
 
     async function load() {
       const [allSchedules, allDeliveries] = await Promise.all([
-        API.deliverySchedules.getAll(),
-        API.deliveries.getAll()
+        DeliveryScheduleAPI.getAll(),
+        DeliveryAPI.getAll()
       ]);
 
-      const myDeliveryIDs = allDeliveries.filter(d => d.DeliveryPerson_ID === session.id).map(d => d.Delivery_ID);
-      const myDeliveries = allDeliveries.filter(d => d.DeliveryPerson_ID === session.id);
-      
-      const mySchedules = allSchedules.filter(s => myDeliveryIDs.includes(s.Delivery_ID));
-      
+      const myDeliveryIDs = allDeliveries.filter(d => d.DeliveryPerson_ID == session.id).map(d => d.Delivery_ID);
+      const myDeliveries = allDeliveries.filter(d => d.DeliveryPerson_ID == session.id);
+
+      const mySchedules = allSchedules.filter(s => myDeliveryIDs.some(id => id == s.Delivery_ID));
+
       scheduleData = mySchedules.map(s => {
-        const d = myDeliveries.find(x => x.Delivery_ID === s.Delivery_ID) || {};
+        const d = myDeliveries.find(x => x.Delivery_ID == s.Delivery_ID) || {};
         return {
           Schedule_ID: s.Schedule_ID,
           Delivery_ID: s.Delivery_ID,

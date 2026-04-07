@@ -12,6 +12,8 @@ class Customer(Base):
     Phone_Num = Column("PHONE_NUM", String(15), nullable=False, unique=True)
     Address = Column("ADDRESS", String(100), nullable=False)
     Area = Column("AREA", String(50), nullable=False)
+    User_Name = Column("USER_NAME", String(50), nullable=False, unique=True)
+    Password = Column("PASSWORD", String(100), nullable=False)
     Account_Status = Column("ACCOUNT_STATUS", String(20), default='Active')
 
     __table_args__ = (
@@ -26,6 +28,18 @@ class Supplier(Base):
     Supplier_ID = Column("SUPPLIER_ID", Integer, primary_key=True, index=True)
     Supplier_Name = Column("SUPPLIER_NAME", String(50), nullable=False)
     Phone_Num = Column("PHONE_NUM", String(15), nullable=False)
+    User_Name = Column("USER_NAME", String(50), nullable=False, unique=True)
+    Password = Column("PASSWORD", String(100), nullable=False)
+
+
+# Admin Model
+class Admin(Base):
+    __tablename__ = "ADMIN"
+
+    Admin_ID = Column("ADMIN_ID", Integer, primary_key=True, index=True)
+    User_Name = Column("USER_NAME", String(50), nullable=False, unique=True)
+    Password = Column("PASSWORD", String(100), nullable=False)
+    Name = Column("NAME", String(50), nullable=True)
 
 
 # Product Model
@@ -80,6 +94,8 @@ class DeliveryPerson(Base):
     DeliveryPerson_ID = Column("DELIVERYPERSON_ID", Integer, primary_key=True, index=True)
     Name = Column("NAME", String(50), nullable=False)
     Phone_Num = Column("PHONE_NUM", String(15), nullable=False)
+    User_Name = Column("USER_NAME", String(50), nullable=False, unique=True)
+    Password = Column("PASSWORD", String(100), nullable=False)
     VehicleType = Column("VEHICLETYPE", String(20))
     Area_assigned = Column("AREA_ASSIGNED", String(50))
 
@@ -138,6 +154,15 @@ class Delivery(Base):
     __table_args__ = (
         CheckConstraint("DELIVERY_STATUS IN ('Pending', 'Delivered', 'Failed')", name='chk_del_status'),
     )
+
+
+# Supplier Product Model (Junction Table)
+class SupplierProduct(Base):
+    __tablename__ = "SUPPLIER_PRODUCT"
+
+    ID = Column("ID", Integer, primary_key=True, index=True)
+    Supplier_ID = Column("SUPPLIER_ID", Integer, ForeignKey("SUPPLIER.SUPPLIER_ID"))
+    Product_ID = Column("PRODUCT_ID", Integer, ForeignKey("PRODUCT.PRODUCT_ID"))
 
 
 # Delivery Schedule Model

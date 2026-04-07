@@ -216,7 +216,7 @@
   }
 
   async function editCustomer(id) {
-    const c = allCustomers.find(x => x.Customer_ID === id);
+    const c = allCustomers.find(x => x.Customer_ID == id);
     if (!c) return;
     editingId = id;
     document.getElementById('modal-title').textContent = 'Edit Customer';

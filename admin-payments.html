@@ -156,7 +156,7 @@
         <td>${p.Payment_Date ? formatDate(p.Payment_Date) : '<span class="td-muted">Not paid</span>'}</td>
         <td>
           ${p.Payment_status === 'Pending'
-            ? `<button class="btn btn-primary btn-xs" onclick="openMarkPaid(${p.Payment_ID})">✅ Mark Paid</button>`
+            ? `<button class="btn btn-primary btn-xs" onclick="openMarkPaid('${p.Payment_ID}')">✅ Mark Paid</button>`
             : '<span class="td-muted">Paid</span>'}
         </td>
       </tr>`).join('');

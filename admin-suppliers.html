@@ -98,6 +98,14 @@
           <label>Phone Number *</label>
           <input type="text" id="f-phone" class="form-control" placeholder="10-digit number" />
         </div>
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="f-username" class="form-control" placeholder="Login username" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="f-password" class="form-control" placeholder="Login password" />
+        </div>
       </div>
       <div style="margin-top:18px">
         <label style="display:block;margin-bottom:8px;font-size:.82rem;font-weight:600;color:var(--text-secondary)">Supplied Products</label>
@@ -109,6 +117,10 @@
       <button class="btn btn-primary" onclick="saveSupplier()">💾 Save</button>
     </div>
   </div>
+</div>
+
+<div id="loading-overlay" class="loading-overlay">
+  <div class="loading-spinner"></div>
 </div>
 
 <div id="toast-container" class="toast-container"></div>
@@ -123,21 +135,52 @@
   buildAdminSidebar('admin-suppliers.html');
   initModalClosers();
 
-  let allSuppliers = [], allProducts = [], allSubs = [];
+  let allSuppliers = [], allProducts = [], allSupplierProducts = [], allSubs = [];
   let editingId = null;
 
   async function load() {
+    showLoading();
     try {
-      [allSuppliers, allProducts, allSubs] = await Promise.all([
-        SupplierAPI.getAll(), ProductAPI.getAll(), SubscriptionAPI.getAll()
+      const results = await Promise.all([
+        SupplierAPI.getAll().catch(error => { console.error('Supplier load failed', error); return []; }),
+        ProductAPI.getAll().catch(error => { console.error('Product load failed', error); return []; }),
+        SupplierProductAPI.getAll().catch(error => { console.error('SupplierProduct load failed', error); return []; }),
+        SubscriptionAPI.getAll().catch(error => { console.error('Subscription load failed', error); return []; })
       ]);
-      document.getElementById('stat-total').textContent = allSuppliers.length;
-      document.getElementById('stat-products').textContent = allProducts.length;
-      document.getElementById('stat-subs').textContent = allSubs.filter(s => s.Status === 'Active').length;
+
+      [allSuppliers, allProducts, allSupplierProducts, allSubs] = results;
+      renderStats();
       renderTable(allSuppliers);
     } catch (error) {
-      showToast('Failed to load: ' + error.message, 'error');
+      console.error('Load failed unexpectedly', error);
+      showToast('Failed to load supplier page: ' + error.message, 'error');
+    } finally {
+      hideLoading();
     }
+  }
+
+  function renderStats() {
+    document.getElementById('stat-total').textContent = allSuppliers.length || 0;
+    document.getElementById('stat-products').textContent = allProducts.length || 0;
+    document.getElementById('stat-subs').textContent = allSubs.filter(s => s.Status === 'Active').length || 0;
+  }
+
+  function getSupplierProductNames(supplierId) {
+    return allSupplierProducts
+      .filter(sp => sp.Supplier_ID == supplierId)
+      .map(sp => allProducts.find(p => p.Product_ID == sp.Product_ID)?.Product_Name || sp.Product_ID);
+  }
+
+  function renderProductCheckboxes(selectedIds = []) {
+    const container = document.getElementById('product-checkboxes');
+    container.innerHTML = allProducts.map(product => {
+      const checked = selectedIds.includes(String(product.Product_ID)) ? 'checked' : '';
+      return `
+        <label class="checkbox-field" style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-secondary)">
+          <input type="checkbox" class="supplier-product" value="${product.Product_ID}" ${checked} />
+          <span>${product.Product_Name} <small class="text-muted">(${product.Unit})</small></span>
+        </label>`;
+    }).join('');
   }
 
   function renderTable(data) {
@@ -146,18 +189,24 @@
       body.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🏭</div><div class="empty-title">No suppliers found</div></div></td></tr>';
       return;
     }
-    body.innerHTML = data.map(s => `<tr>
+    body.innerHTML = data.map(s => {
+      const products = getSupplierProductNames(s.Supplier_ID);
+      const productLabel = products.length ? `${products.length} product${products.length === 1 ? '' : 's'}` : 'None';
+      const escapedNames = products.join(', ').replace(/"/g, '&quot;');
+      const title = products.length ? ` title="${escapedNames}"` : '';
+      return `<tr>
         <td class="td-muted">${s.Supplier_ID}</td>
         <td><strong>${s.Supplier_Name}</strong></td>
         <td>${s.Phone_Num}</td>
-        <td>-</td>
+        <td${title}>${productLabel}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editSupplier(${s.Supplier_ID})">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteSupplier(${s.Supplier_ID})">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editSupplier('${s.Supplier_ID}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteSupplier('${s.Supplier_ID}')">🗑️</button>
           </div>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   }
 
   function filterTable() {
@@ -165,51 +214,82 @@
     renderTable(allSuppliers.filter(s => !q || s.Supplier_Name.toLowerCase().includes(q) || s.Phone_Num.includes(q)));
   }
 
-  function openAddModal() {
+  async function openAddModal() {
     editingId = null;
     document.getElementById('modal-title').textContent = 'Add Supplier';
     document.getElementById('f-name').value = '';
     document.getElementById('f-phone').value = '';
+    document.getElementById('f-username').value = '';
+    document.getElementById('f-password').value = '';
+    renderProductCheckboxes([]);
     openModal('supplier-modal');
   }
 
-  function editSupplier(id) {
-    const s = allSuppliers.find(x => x.Supplier_ID === id);
+  async function editSupplier(id) {
+    const s = allSuppliers.find(x => x.Supplier_ID == id);
     if (!s) return;
     editingId = id;
     document.getElementById('modal-title').textContent = 'Edit Supplier';
     document.getElementById('f-name').value  = s.Supplier_Name;
     document.getElementById('f-phone').value = s.Phone_Num;
+    document.getElementById('f-username').value = s.User_Name || '';
+    document.getElementById('f-password').value = '';
+    const selectedIds = allSupplierProducts
+      .filter(sp => sp.Supplier_ID == id)
+      .map(sp => String(sp.Product_ID));
+    renderProductCheckboxes(selectedIds);
     openModal('supplier-modal');
   }
 
   async function saveSupplier() {
     const name  = document.getElementById('f-name').value.trim();
     const phone = document.getElementById('f-phone').value.trim();
+    const username = document.getElementById('f-username').value.trim();
+    const password = document.getElementById('f-password').value.trim();
+    const selectedIds = Array.from(document.querySelectorAll('.supplier-product:checked')).map(cb => cb.value);
     if (!name || !phone) { showToast('Please fill all required fields', 'error'); return; }
+    showLoading();
     try {
       if (editingId) {
-        await SupplierAPI.update(editingId, { Supplier_Name: name, Phone_Num: phone });
+        const data = { Supplier_Name: name, Phone_Num: phone };
+        if (username) data.User_Name = username;
+        if (password) data.Password = password;
+        await SupplierAPI.update(editingId, data);
+        const existingLinks = await SupplierProductAPI.getBySupplier(editingId);
+        const existingIds = existingLinks.map(link => String(link.Product_ID));
+        const toAdd = selectedIds.filter(pid => !existingIds.includes(pid));
+        const toRemove = existingIds.filter(pid => !selectedIds.includes(pid));
+        await Promise.all(toAdd.map(pid => SupplierProductAPI.create({ Supplier_ID: editingId, Product_ID: pid })));
+        await Promise.all(toRemove.map(pid => SupplierProductAPI.delete(editingId, pid)));
         showToast('Supplier updated!');
       } else {
-        await SupplierAPI.create({ Supplier_Name: name, Phone_Num: phone });
+        const data = { Supplier_Name: name, Phone_Num: phone };
+        if (username) data.User_Name = username;
+        if (password) data.Password = password;
+        const supplier = await SupplierAPI.create(data);
+        await Promise.all(selectedIds.map(pid => SupplierProductAPI.create({ Supplier_ID: supplier.Supplier_ID, Product_ID: pid })));
         showToast('Supplier added!');
       }
       closeModal('supplier-modal');
       load();
     } catch (error) {
       showToast('Failed to save: ' + error.message, 'error');
+    } finally {
+      hideLoading();
     }
   }
 
   async function deleteSupplier(id) {
     if (!confirmAction('Delete this supplier?')) return;
+    showLoading();
     try {
       await SupplierAPI.delete(id);
       showToast('Supplier deleted', 'warning');
       load();
     } catch (error) {
       showToast('Failed to delete: ' + error.message, 'error');
+    } finally {
+      hideLoading();
     }
   }
 

@@ -130,6 +130,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/customer.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const session = Auth.requireAuth('customer');
   let allPayments = [];
@@ -142,7 +143,10 @@
     initModalClosers();
 
     async function load() {
-      allPayments = await API.payments.getByCustomer(session.id);
+      // Get all payments and orders, then filter for this customer
+      const [allPay, allOrders] = await Promise.all([PaymentAPI.getAll(), OrderAPI.getAll()]);
+      const customerOrderIds = new Set(allOrders.filter(o => o.Customer_ID == session.id).map(o => o.Order_ID));
+      allPayments = allPay.filter(p => customerOrderIds.has(p.Order_ID));
       const paid    = allPayments.filter(p => p.Payment_status === 'Paid');
       const pending = allPayments.filter(p => p.Payment_status === 'Pending');
       document.getElementById('p-paid').textContent    = formatCurrency(paid.reduce((s,p) => s+p.Amount, 0));
@@ -224,8 +228,19 @@
       btn.textContent = '⏳ Processing…';
       btn.disabled = true;
       await new Promise(r => setTimeout(r, 800));
-      await API.payments.markPaid(payingId, method);
-      showToast('Payment successful! 🎉', 'success');
+      await PaymentAPI.update(payingId, {
+        Payment_status: 'Paid',
+        Payment_method: method,
+        Payment_Date: new Date().toISOString().slice(0, 10)
+      });
+
+      // Update the corresponding order status to Processing
+      const payment = allPayments.find(p => p.Payment_ID == payingId);
+      if (payment) {
+        await OrderAPI.update(payment.Order_ID, { Order_status: 'Processing' });
+      }
+
+      showToast('Payment successful! Order status updated.', 'success');
       closeModal('pay-modal');
       btn.textContent = '✅ Pay Now';
       btn.disabled = false;

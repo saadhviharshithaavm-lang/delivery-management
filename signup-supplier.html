@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Supplier Sign Up — FreshDeliver</title>
+  <link rel="stylesheet" href="index.css" />
+  <style>
+    .signup-page {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0c3d25 0%, #1a7c4e 50%, #0f5a36 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+    .signup-card {
+      background: white;
+      border-radius: var(--radius-xl);
+      padding: 40px;
+      box-shadow: 0 32px 80px rgba(0,0,0,.2);
+      width: 100%;
+      max-width: 520px;
+      animation: scaleIn .3s ease;
+    }
+    .signup-card h2 { font-size: 1.5rem; font-weight: 800; color: var(--text-primary); margin-bottom: 6px; }
+    .signup-card .subtitle { color: var(--text-muted); font-size: .875rem; margin-bottom: 28px; }
+    .signup-card .role-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent-light); color: #92400e;
+      padding: 5px 14px; border-radius: var(--radius-full);
+      font-size: .8rem; font-weight: 700; margin-bottom: 20px;
+    }
+    .signup-form { display: flex; flex-direction: column; gap: 16px; }
+    .signup-form .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .signup-form label { display: block; font-size: .82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; }
+    .signup-form input {
+      width: 100%; padding: 10px 14px;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      font-size: .875rem; background: var(--surface-2);
+      outline: none; transition: var(--transition);
+    }
+    .signup-form input:focus {
+      border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-bg); background: white;
+    }
+    .btn-signup {
+      width: 100%; padding: 13px;
+      background: var(--primary); color: white;
+      border-radius: var(--radius); font-weight: 700; font-size: 1rem;
+      border: none; cursor: pointer; transition: var(--transition);
+      font-family: 'Outfit', sans-serif;
+    }
+    .btn-signup:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(26,124,78,.35); }
+    .btn-signup:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+    .signup-footer { margin-top: 18px; text-align: center; font-size: .82rem; color: var(--text-muted); }
+    .signup-footer a { color: var(--primary); font-weight: 600; }
+    .signup-footer a:hover { text-decoration: underline; }
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: rgba(255,255,255,.8); font-size: .9rem; font-weight: 600;
+      margin-bottom: 20px; transition: var(--transition);
+    }
+    .back-link:hover { color: white; }
+    #signup-error {
+      color: var(--danger); font-size: .82rem; display: none;
+      background: var(--danger-light); padding: 8px 12px; border-radius: var(--radius);
+    }
+    #signup-success {
+      color: #059669; font-size: .82rem; display: none;
+      background: var(--success-light); padding: 8px 12px; border-radius: var(--radius);
+    }
+    @media (max-width: 480px) {
+      .signup-form .form-row { grid-template-columns: 1fr; }
+      .signup-card { padding: 28px 22px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="signup-page">
+  <a href="index.html" class="back-link">← Back to Home</a>
+
+  <div class="signup-card">
+    <div class="role-badge">🏭 Supplier Account</div>
+    <h2>Register as Supplier</h2>
+    <p class="subtitle">Join our network to supply fresh milk & vegetables to customers</p>
+
+    <form class="signup-form" id="signup-form" onsubmit="handleSignup(event)">
+      <div class="form-group">
+        <label for="supplier-name">Business / Farm Name *</label>
+        <input type="text" id="supplier-name" placeholder="e.g. Green Valley Farms" required />
+      </div>
+
+      <div class="form-group">
+        <label for="phone">Phone Number *</label>
+        <input type="tel" id="phone" placeholder="e.g. 8012345678" pattern="[0-9]{10}" maxlength="10" required />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="username">Username *</label>
+          <input type="text" id="username" placeholder="Choose a username" minlength="3" required />
+        </div>
+        <div class="form-group">
+          <label for="password">Password *</label>
+          <input type="password" id="password" placeholder="Min 4 characters" minlength="4" required />
+        </div>
+      </div>
+
+      <div id="signup-error"></div>
+      <div id="signup-success"></div>
+
+      <button type="submit" class="btn-signup" id="signup-btn">Register as Supplier →</button>
+    </form>
+
+    <div class="signup-footer">
+      Already have an account? <a href="index.html#login">Sign In</a>
+      &nbsp;|&nbsp;
+      <a href="signup-customer.html">Sign up as Customer</a>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api-client.js"></script>
+<script>
+  // Redirect if already logged in
+  if (typeof Auth !== 'undefined') {
+    const session = Auth.getSession();
+    if (session) {
+      const ROLE_HOME = {
+        admin: 'admin-dashboard.html', customer: 'customer-dashboard.html',
+        supplier: 'supplier-dashboard.html', delivery: 'delivery-dashboard.html',
+      };
+      window.location.href = ROLE_HOME[session.role] || 'index.html';
+    }
+  }
+
+  async function handleSignup(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('signup-error');
+    const sucEl = document.getElementById('signup-success');
+    const btn = document.getElementById('signup-btn');
+
+    const supplierName = document.getElementById('supplier-name').value.trim();
+    const phone        = document.getElementById('phone').value.trim();
+    const username     = document.getElementById('username').value.trim().toLowerCase();
+    const password     = document.getElementById('password').value;
+
+    errEl.style.display = 'none';
+    sucEl.style.display = 'none';
+
+// Check if username already exists in backend or demo accounts
+      const [customers, suppliers, deliveryPersons] = await Promise.all([
+        CustomerAPI.getAll(), SupplierAPI.getAll(), DeliveryPersonAPI.getAll()
+      ]);
+      const allUsernames = new Set([
+        DEMO_ACCOUNTS.admin.username,
+        ...DEMO_ACCOUNTS.customers.map(a => a.username),
+        ...DEMO_ACCOUNTS.suppliers.map(a => a.username),
+        ...DEMO_ACCOUNTS.deliveryPersons.map(a => a.username),
+        ...customers.map(c => c.User_Name),
+        ...suppliers.map(s => s.User_Name),
+        ...deliveryPersons.map(d => d.User_Name),
+      ]);
+      if (allUsernames.has(username)) {
+        errEl.textContent = 'Username already taken. Please choose another.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+    btn.textContent = 'Registering…';
+    btn.disabled = true;
+
+    try {
+      // Create supplier record (API auto-generates Supplier_ID)
+      const newSupplier = await SupplierAPI.create({
+        Supplier_Name: supplierName,
+        Phone_Num: phone,
+        User_Name: username,
+        Password: password
+      });
+
+      // Add to DEMO_ACCOUNTS so they can log in
+      DEMO_ACCOUNTS.suppliers.push({
+        username: username,
+        password: password,
+        role: 'supplier',
+        id: newSupplier.Supplier_ID,
+        name: supplierName
+      });
+
+      sucEl.textContent = 'Supplier account created! Redirecting to login…';
+      sucEl.style.display = 'block';
+      if (typeof showToast === 'function') {
+        showToast('Welcome aboard! Your supplier account is ready.', 'success');
+      }
+
+      setTimeout(() => {
+        window.location.href = 'index.html#login';
+      }, 1500);
+    } catch (error) {
+      errEl.textContent = 'Something went wrong: ' + error.message;
+      errEl.style.display = 'block';
+      btn.textContent = 'Register as Supplier →';
+      btn.disabled = false;
+    }
+  }
+</script>
+
+</body>
+</html>

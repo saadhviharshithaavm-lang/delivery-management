@@ -4,7 +4,8 @@
       "Bash(python -m http.server 8080)",
       "Bash(node -c js/auth.js)",
       "Bash(node -c js/api.js)",
-      "Bash(python -m venv venv)"
+      "Bash(python -m venv venv)",
+      "Bash(ls:*)"
     ]
   }
 }

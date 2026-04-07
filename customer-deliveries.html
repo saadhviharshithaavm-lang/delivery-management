@@ -76,6 +76,7 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/customer.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const session = Auth.requireAuth('customer');
   let allDeliveries = [], allDPs = [];
@@ -86,10 +87,14 @@
     buildCustomerSidebar('customer-deliveries.html');
 
     async function load() {
-      [allDeliveries, allDPs] = await Promise.all([
-        API.deliveries.getByCustomer(session.id),
-        API.deliveryPersons.getAll()
+      const [allOrders, allDeliveriesRaw, dps] = await Promise.all([
+        OrderAPI.getAll(),
+        DeliveryAPI.getAll(),
+        DeliveryPersonAPI.getAll()
       ]);
+      const myOrderIds = allOrders.filter(o => o.Customer_ID == session.id).map(o => o.Order_ID);
+      allDeliveries = allDeliveriesRaw.filter(d => myOrderIds.includes(d.Order_ID));
+      allDPs = dps;
       document.getElementById('d-delivered').textContent = allDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
       document.getElementById('d-pending').textContent   = allDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
       document.getElementById('d-failed').textContent    = allDeliveries.filter(d => d.Delivery_Status === 'Failed').length;

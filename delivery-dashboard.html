@@ -113,9 +113,14 @@
   </div>
 </div>
 
+<div id="loading-overlay" class="loading-overlay">
+  <div class="loading-spinner"></div>
+</div>
+
 <div id="toast-container" class="toast-container"></div>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const DELIVERY_NAV = [
     { section: 'My Portal', items: [
@@ -151,45 +156,56 @@
     document.getElementById('dp-name').textContent = session.name.split(' ')[0];
 
     async function load() {
-      const [allDeliveries, allOrders, allSchedules] = await Promise.all([
-        API.deliveries.getAll(), API.orders.getAll(),
-        API.deliverySchedules.getAll()
-      ]);
+      showLoading();
+      try {
+        const [allDeliveries, allOrders, allSchedules] = await Promise.all([
+          DeliveryAPI.getAll().catch(err => { console.error('Deliveries API failed:', err); return []; }),
+          OrderAPI.getAll().catch(err => { console.error('Orders API failed:', err); return []; }),
+          DeliveryScheduleAPI.getAll().catch(err => { console.error('Schedules API failed:', err); return []; })
+        ]);
+        console.log('Loaded deliveries:', allDeliveries);
+        console.log(session.id)
+        allMyDeliveries = allDeliveries.filter(d => d.DeliveryPerson_ID == session.id);
+        console.log('Loaded deliveries:', allDeliveries);
 
-      allMyDeliveries = allDeliveries.filter(d => d.DeliveryPerson_ID === session.id);
+        // Stats
+        document.getElementById('d-total').textContent     = allMyDeliveries.length;
+        document.getElementById('d-pending').textContent   = allMyDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
+        document.getElementById('d-delivered').textContent = allMyDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
+        document.getElementById('d-failed').textContent    = allMyDeliveries.filter(d => d.Delivery_Status === 'Failed').length;
 
-      // Stats
-      document.getElementById('d-total').textContent     = allMyDeliveries.length;
-      document.getElementById('d-pending').textContent   = allMyDeliveries.filter(d => d.Delivery_Status === 'Pending').length;
-      document.getElementById('d-delivered').textContent = allMyDeliveries.filter(d => d.Delivery_Status === 'Delivered').length;
-      document.getElementById('d-failed').textContent    = allMyDeliveries.filter(d => d.Delivery_Status === 'Failed').length;
+        // Today's deliveries
+        const today = new Date().toISOString().slice(0, 10);
+        const todaysDeliveries = allMyDeliveries.filter(d => d.Delivery_date === today);
+        document.getElementById('today-count').textContent = `${todaysDeliveries.length} today`;
+        const todayEl = document.getElementById('today-deliveries-content');
+        if (!todaysDeliveries.length) {
+          todayEl.innerHTML = '<div class="empty-state" style="padding:24px 0"><div class="empty-icon">🎉</div><div class="empty-title">No deliveries scheduled for today</div></div>';
+        } else {
+          todayEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">${todaysDeliveries.map(d => {
+            const schedule = allSchedules.find(s => s.Delivery_ID == d.Delivery_ID);
+            return `<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--surface-2);border-radius:var(--radius);border:1px solid var(--border)">
+              <div>
+                <div class="fw-700">${d.Delivery_ID} <span class="td-muted">· ${d.Order_ID}</span></div>
+                ${schedule ? `<div style="font-size:.78rem;color:var(--info);margin-top:2px">🕐 Time Slot: ${schedule.Time_slot}</div>` : ''}
+              </div>
+              <div style="display:flex;align-items:center;gap:10px">
+                ${statusBadge(d.Delivery_Status)}
+                ${d.Delivery_Status === 'Pending'
+                  ? `<button class="btn btn-primary btn-sm" onclick="openUpdateModal('${d.Delivery_ID}')">📝 Update</button>`
+                  : `<button class="btn btn-secondary btn-sm" onclick="openUpdateModal('${d.Delivery_ID}')">✏️ Change</button>`}
+              </div>
+            </div>`;
+          }).join('')}</div>`;
+        }
 
-      // Today's deliveries
-      const today = new Date().toISOString().slice(0, 10);
-      const todaysDeliveries = allMyDeliveries.filter(d => d.Delivery_date === today);
-      document.getElementById('today-count').textContent = `${todaysDeliveries.length} today`;
-      const todayEl = document.getElementById('today-deliveries-content');
-      if (!todaysDeliveries.length) {
-        todayEl.innerHTML = '<div class="empty-state" style="padding:24px 0"><div class="empty-icon">🎉</div><div class="empty-title">No deliveries scheduled for today</div></div>';
-      } else {
-        todayEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">${todaysDeliveries.map(d => {
-          const schedule = allSchedules.find(s => s.Delivery_ID === d.Delivery_ID);
-          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--surface-2);border-radius:var(--radius);border:1px solid var(--border)">
-            <div>
-              <div class="fw-700">${d.Delivery_ID} <span class="td-muted">· ${d.Order_ID}</span></div>
-              ${schedule ? `<div style="font-size:.78rem;color:var(--info);margin-top:2px">🕐 Time Slot: ${schedule.Time_slot}</div>` : ''}
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              ${statusBadge(d.Delivery_Status)}
-              ${d.Delivery_Status === 'Pending'
-                ? `<button class="btn btn-primary btn-sm" onclick="openUpdateModal('${d.Delivery_ID}')">📝 Update</button>`
-                : `<button class="btn btn-secondary btn-sm" onclick="openUpdateModal('${d.Delivery_ID}')">✏️ Change</button>`}
-            </div>
-          </div>`;
-        }).join('')}</div>`;
+        renderTable(allMyDeliveries);
+      } catch (error) {
+        console.error('Load failed:', error);
+        showToast('Failed to load deliveries: ' + error.message, 'error');
+      } finally {
+        hideLoading();
       }
-
-      renderTable(allMyDeliveries);
     }
 
     function renderTable(data) {
@@ -226,10 +242,35 @@
 
     async function saveStatus() {
       const newStatus = document.getElementById('f-status').value;
-      await API.deliveries.update(updatingId, { Delivery_Status: newStatus });
-      showToast(newStatus === 'Delivered' ? '✅ Marked as Delivered!' : '🔄 Status updated!');
-      closeModal('status-modal');
-      load();
+
+      const delivery = allMyDeliveries.find(d => String(d.Delivery_ID) === String(updatingId));
+      console.log('allMyDeliveries:', allMyDeliveries);
+      console.log('updatingId:', updatingId, 'type:', typeof updatingId);
+      console.log('Found delivery:', delivery);
+
+      if (!delivery) {
+        showToast('Delivery not found - it may not be assigned to you', 'error');
+        return;
+      }
+
+      showLoading();
+      try {
+        // Update delivery status
+        await DeliveryAPI.update(updatingId, { Delivery_Status: newStatus });
+
+        // If marked as delivered, also update the order status
+        if (newStatus === 'Delivered') {
+          await OrderAPI.update(delivery.Order_ID, { Order_status: 'Delivered' });
+        }
+
+        showToast(newStatus === 'Delivered' ? '✅ Marked as Delivered!' : '🔄 Status updated!');
+        closeModal('status-modal');
+        load();
+      } catch (error) {
+        showToast('Failed to update status: ' + error.message, 'error');
+      } finally {
+        hideLoading();
+      }
     }
 
     window.filterTable = filterTable;

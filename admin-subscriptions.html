@@ -31,9 +31,9 @@
           <div class="page-title">Subscriptions</div>
           <div class="page-subtitle">View and manage all customer subscriptions</div>
         </div>
-        <div class="page-header-actions">
+        <!-- div class="page-header-actions">
           <button class="btn btn-primary" onclick="openAddModal()">➕ Add Subscription</button>
-        </div>
+        </div -->
       </div>
 
       <!-- Stats -->
@@ -150,7 +150,7 @@
   const suppMap = () => Object.fromEntries(allSuppliers.map(s => [s.Supplier_ID, s.Supplier_Name]));
 
   function getSubProducts(sid) {
-    return allDetails.filter(d => d.Subscription_ID === sid).map(d => {
+    return allDetails.filter(d => d.Subscription_ID == sid).map(d => {
       const pname = allProducts.find(p => p.Product_ID === d.Product_ID)?.Product_Name || d.Product_ID;
       return `${pname} (${d.Quantity_Per_Day}/day)`;
     });
@@ -174,8 +174,8 @@
         <td style="max-width:160px">${prods.map(p => `<span class="badge badge-muted" style="margin:2px;font-size:.68rem">${p}</span>`).join('') || '<span class="td-muted">None</span>'}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editSub(${s.Subscription_ID})">✏️</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteSub(${s.Subscription_ID})">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editSub('${s.Subscription_ID}')">✏️</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteSub('${s.Subscription_ID}')">🗑️</button>
           </div>
         </td>
       </tr>`;
@@ -207,7 +207,7 @@
   }
 
   function editSub(id) {
-    const s = allSubs.find(x => x.Subscription_ID === id);
+    const s = allSubs.find(x => x.Subscription_ID == id);
     if (!s) return;
     editingId = id;
     document.getElementById('modal-title').textContent = 'Edit Subscription';

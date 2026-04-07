@@ -63,6 +63,7 @@
 <div id="toast-container" class="toast-container"></div>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const SUPPLIER_NAV = [
     { section: 'Portal', items: [
@@ -96,10 +97,30 @@
     buildSupplierSidebar('supplier-products.html');
 
     async function load() {
-      const allProducts = await API.products.getAll();
-      allInv = await API.inventory.getAll();
-      allMyProducts = allProducts.filter(p => p.Supplier_ID === session.id);
-      renderTable(allMyProducts);
+      try {
+        const [allProducts, supplierLinks] = await Promise.all([
+          ProductAPI.getAll(),
+          SupplierProductAPI.getBySupplier(session.id)
+        ]);
+        allInv = await InventoryAPI.getAll();
+
+        let myProductIDs = supplierLinks.map(sp => sp.Product_ID);
+        allMyProducts = allProducts.filter(p => myProductIDs.includes(p.Product_ID));
+
+        if (!allMyProducts.length && !supplierLinks.length) {
+          console.warn('No supplier-product links found; falling back to direct Supplier_ID mapping.');
+          allMyProducts = allProducts.filter(p => String(p.Supplier_ID) === String(session.id));
+        }
+
+        if (!allMyProducts.length && supplierLinks.length) {
+          console.warn('No matching product records found for supplier products:', supplierLinks, allProducts);
+        }
+
+        renderTable(allMyProducts);
+      } catch (error) {
+        console.error('Supplier products load failed:', error);
+        showToast('Failed to load supplier products: ' + error.message, 'error');
+      }
     }
 
     function renderTable(data) {
@@ -122,7 +143,7 @@
           <td><strong>${p.Product_Name}</strong></td>
           <td><span class="badge badge-muted">${p.Category || 'General'}</span></td>
           <td>${p.Unit}</td>
-          <td class="fw-700" style="color:var(--primary)">${formatCurrency(p.Price)}</td>
+          <td class="fw-700" style="color:var(--primary)">${formatCurrency(p.Price_per_unit)}</td>
           <td>${stock} ${stockBadge}</td>
         </tr>`;
       }).join('');

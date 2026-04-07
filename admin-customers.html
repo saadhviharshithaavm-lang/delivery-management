@@ -106,6 +106,14 @@
             <option value="Inactive">Inactive</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="f-username" class="form-control" placeholder="Login username" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="f-password" class="form-control" placeholder="Login password" />
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -163,8 +171,8 @@
         <td>${statusBadge(c.Account_Status)}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editCustomer(${c.Customer_ID})">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteCustomer(${c.Customer_ID})">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editCustomer('${c.Customer_ID}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteCustomer('${c.Customer_ID}')">🗑️</button>
           </div>
         </td>
       </tr>`).join('');
@@ -185,13 +193,13 @@
   function openAddModal() {
     editingId = null;
     document.getElementById('modal-title').textContent = 'Add New Customer';
-    ['f-name','f-phone','f-address','f-area'].forEach(id => document.getElementById(id).value = '');
+    ['f-name','f-phone','f-address','f-area','f-username','f-password'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('f-status').value = 'Active';
     openModal('customer-modal');
   }
 
   async function editCustomer(id) {
-    const c = allCustomers.find(x => x.Customer_ID === id);
+    const c = allCustomers.find(x => x.Customer_ID == id);
     if (!c) return;
     editingId = id;
     document.getElementById('modal-title').textContent = 'Edit Customer';
@@ -200,6 +208,8 @@
     document.getElementById('f-address').value = c.Address;
     document.getElementById('f-area').value    = c.Area;
     document.getElementById('f-status').value  = c.Account_Status;
+    document.getElementById('f-username').value = c.User_Name || '';
+    document.getElementById('f-password').value = '';
     openModal('customer-modal');
   }
 
@@ -209,9 +219,14 @@
     const address = document.getElementById('f-address').value.trim();
     const area    = document.getElementById('f-area').value.trim();
     const status  = document.getElementById('f-status').value;
+    const username = document.getElementById('f-username').value.trim();
+    const password = document.getElementById('f-password').value.trim();
     if (!name || !phone || !address || !area) { showToast('Please fill all required fields', 'error'); return; }
     if (!/^\d{10}$/.test(phone)) { showToast('Phone number must be exactly 10 digits', 'error'); return; }
     const data = { Name: name, Phone_Num: phone, Address: address, Area: area, Account_Status: status };
+    if (username) data.User_Name = username;
+    if (password) data.Password = password;
+    showLoading();
     try {
       if (editingId) {
         await CustomerAPI.update(editingId, data);
@@ -224,17 +239,22 @@
       loadCustomers();
     } catch (error) {
       showToast('Failed to save: ' + error.message, 'error');
+    } finally {
+      hideLoading();
     }
   }
 
   async function deleteCustomer(id) {
     if (!confirmAction('Delete this customer? This cannot be undone.')) return;
+    showLoading();
     try {
       await CustomerAPI.delete(id);
       showToast('Customer deleted', 'warning');
       loadCustomers();
     } catch (error) {
       showToast('Failed to delete: ' + error.message, 'error');
+    } finally {
+      hideLoading();
     }
   }
 

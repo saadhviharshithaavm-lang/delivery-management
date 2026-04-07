@@ -8,6 +8,8 @@ class CustomerBase(BaseModel):
     Phone_Num: str = Field(..., pattern=r'^\d{10}$')
     Address: str = Field(..., min_length=1, max_length=100)
     Area: str = Field(..., min_length=1, max_length=50)
+    User_Name: Optional[str] = Field(None, min_length=3, max_length=50)
+    Password: Optional[str] = Field(None, min_length=4, max_length=100)
     Account_Status: Literal['Active', 'Inactive'] = 'Active'
 
 class CustomerCreate(CustomerBase):
@@ -18,10 +20,18 @@ class CustomerUpdate(BaseModel):
     Phone_Num: Optional[str] = Field(None, pattern=r'^\d{10}$')
     Address: Optional[str] = Field(None, min_length=1, max_length=100)
     Area: Optional[str] = Field(None, min_length=1, max_length=50)
+    User_Name: Optional[str] = Field(None, min_length=3, max_length=50)
+    Password: Optional[str] = Field(None, min_length=4, max_length=100)
     Account_Status: Optional[Literal['Active', 'Inactive']] = None
 
-class CustomerResponse(CustomerBase):
+class CustomerResponse(BaseModel):
     Customer_ID: int
+    Name: str
+    Phone_Num: str
+    Address: str
+    Area: str
+    Account_Status: Literal['Active', 'Inactive']
+    User_Name: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -29,6 +39,8 @@ class CustomerResponse(CustomerBase):
 class SupplierBase(BaseModel):
     Supplier_Name: str = Field(..., min_length=1, max_length=50)
     Phone_Num: str = Field(..., min_length=1, max_length=15)
+    User_Name: Optional[str] = Field(None, min_length=3, max_length=50)
+    Password: Optional[str] = Field(None, min_length=4, max_length=100)
 
 class SupplierCreate(SupplierBase):
     pass
@@ -36,9 +48,14 @@ class SupplierCreate(SupplierBase):
 class SupplierUpdate(BaseModel):
     Supplier_Name: Optional[str] = Field(None, min_length=1, max_length=50)
     Phone_Num: Optional[str] = Field(None, min_length=1, max_length=15)
+    User_Name: Optional[str] = Field(None, min_length=3, max_length=50)
+    Password: Optional[str] = Field(None, min_length=4, max_length=100)
 
-class SupplierResponse(SupplierBase):
+class SupplierResponse(BaseModel):
     Supplier_ID: int
+    Supplier_Name: str
+    Phone_Num: str
+    User_Name: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -125,6 +142,8 @@ class SubscriptionDetailResponse(SubscriptionDetailBase):
 class DeliveryPersonBase(BaseModel):
     Name: str = Field(..., min_length=1, max_length=50)
     Phone_Num: str = Field(..., min_length=1, max_length=15)
+    User_Name: Optional[str] = Field(None, min_length=3, max_length=50)
+    Password: Optional[str] = Field(None, min_length=4, max_length=100)
     VehicleType: Optional[str] = Field(None, max_length=20)
     Area_assigned: Optional[str] = Field(None, max_length=50)
 
@@ -134,19 +153,37 @@ class DeliveryPersonCreate(DeliveryPersonBase):
 class DeliveryPersonUpdate(BaseModel):
     Name: Optional[str] = Field(None, min_length=1, max_length=50)
     Phone_Num: Optional[str] = Field(None, min_length=1, max_length=15)
+    User_Name: Optional[str] = Field(None, min_length=3, max_length=50)
+    Password: Optional[str] = Field(None, min_length=4, max_length=100)
     VehicleType: Optional[str] = Field(None, max_length=20)
     Area_assigned: Optional[str] = Field(None, max_length=50)
 
-class DeliveryPersonResponse(DeliveryPersonBase):
+class DeliveryPersonResponse(BaseModel):
     DeliveryPerson_ID: int
+    Name: str
+    Phone_Num: str
+    User_Name: Optional[str] = None
+    VehicleType: Optional[str] = None
+    Area_assigned: Optional[str] = None
     class Config:
         from_attributes = True
+
+# ==================== LOGIN ====================
+class LoginRequest(BaseModel):
+    User_Name: str = Field(..., min_length=1, max_length=50)
+    Password: str = Field(..., min_length=4, max_length=100)
+    Role: Optional[Literal['admin', 'customer', 'supplier', 'delivery']] = None
+
+class LoginResponse(BaseModel):
+    id: int
+    role: Literal['admin', 'customer', 'supplier', 'delivery']
+    name: str
 
 # ==================== ORDER ====================
 class OrderBase(BaseModel):
     Customer_ID: int
     Order_date: date
-    Order_status: Literal['Pending', 'Processing', 'Delivered', 'Cancelled'] = 'Pending'
+    Order_status: Literal['Pending', 'Confirmed', 'Processing', 'Delivered', 'Cancelled'] = 'Pending'
     Total_amount: float
 
 class OrderCreate(OrderBase):
@@ -155,7 +192,7 @@ class OrderCreate(OrderBase):
 class OrderUpdate(BaseModel):
     Customer_ID: Optional[int] = None
     Order_date: Optional[date] = None
-    Order_status: Optional[Literal['Pending', 'Processing', 'Delivered', 'Cancelled']] = None
+    Order_status: Optional[Literal['Pending', 'Confirmed', 'Processing', 'Delivered', 'Cancelled']] = None
     Total_amount: Optional[float] = None
 
 class OrderResponse(OrderBase):
@@ -188,7 +225,7 @@ class PaymentBase(BaseModel):
     Order_ID: int
     Amount: float
     Payment_method: str = Field(..., max_length=20)
-    Payment_status: Literal['Paid', 'Pending', 'Failed'] = 'Pending'
+    Payment_status: Literal['Paid', 'Pending', 'Completed', 'Failed'] = 'Pending'
     Payment_Date: Optional[date] = None
 
 class PaymentCreate(PaymentBase):
@@ -198,7 +235,7 @@ class PaymentUpdate(BaseModel):
     Order_ID: Optional[int] = None
     Amount: Optional[float] = None
     Payment_method: Optional[str] = Field(None, max_length=20)
-    Payment_status: Optional[Literal['Paid', 'Pending', 'Failed']] = None
+    Payment_status: Optional[Literal['Paid', 'Pending', 'Completed', 'Failed']] = None
     Payment_Date: Optional[date] = None
 
 class PaymentResponse(PaymentBase):
@@ -211,7 +248,7 @@ class DeliveryBase(BaseModel):
     Order_ID: int
     DeliveryPerson_ID: int
     Delivery_date: date
-    Delivery_Status: Literal['Pending', 'Delivered', 'Failed'] = 'Pending'
+    Delivery_Status: Literal['Pending', 'Scheduled', 'Out for Delivery', 'Delivered', 'Failed'] = 'Pending'
 
 class DeliveryCreate(DeliveryBase):
     pass
@@ -220,7 +257,7 @@ class DeliveryUpdate(BaseModel):
     Order_ID: Optional[int] = None
     DeliveryPerson_ID: Optional[int] = None
     Delivery_date: Optional[date] = None
-    Delivery_Status: Optional[Literal['Pending', 'Delivered', 'Failed']] = None
+    Delivery_Status: Optional[Literal['Pending', 'Scheduled', 'Out for Delivery', 'Delivered', 'Failed']] = None
 
 class DeliveryResponse(DeliveryBase):
     Delivery_ID: int
@@ -245,6 +282,19 @@ class DeliveryScheduleUpdate(BaseModel):
 
 class DeliveryScheduleResponse(DeliveryScheduleBase):
     Schedule_ID: int
+    class Config:
+        from_attributes = True
+
+# ==================== SUPPLIER PRODUCT ====================
+class SupplierProductBase(BaseModel):
+    Supplier_ID: int
+    Product_ID: int
+
+class SupplierProductCreate(SupplierProductBase):
+    pass
+
+class SupplierProductResponse(SupplierProductBase):
+    ID: int
     class Config:
         from_attributes = True
 

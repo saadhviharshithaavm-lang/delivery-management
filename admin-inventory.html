@@ -118,7 +118,7 @@
     } catch (error) { showToast('Failed to load: ' + error.message, 'error'); }
   }
 
-  function getProductName(pid) { return allProducts.find(p => p.Product_ID === pid)?.Product_Name || pid; }
+  function getProductName(pid) { return allProducts.find(p => p.Product_ID == pid)?.Product_Name || pid; }
 
   function stockBadge(qty) {
     if (qty < 25) return '<span class="badge badge-danger">Critical</span>';
@@ -152,8 +152,8 @@
         <td>${formatDate(i.LastUpdated)}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editInventory(${i.Inventory_ID})">✏️ Update</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteInventory(${i.Inventory_ID})">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editInventory('${i.Inventory_ID}')">✏️ Update</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteInventory('${i.Inventory_ID}')">🗑️</button>
           </div>
         </td>
       </tr>`).join('');
@@ -186,7 +186,7 @@
   }
 
   function editInventory(id) {
-    const inv = allInventory.find(i => i.Inventory_ID === id);
+    const inv = allInventory.find(i => i.Inventory_ID == id);
     if (!inv) return;
     editingId = id;
     document.getElementById('modal-title').textContent = 'Update Stock';

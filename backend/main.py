@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 
 from database import get_db
 from models import (
-    Customer, Supplier, Product, Inventory, Subscription, SubscriptionDetail,
-    DeliveryPerson, Order, OrderItem, Payment, Delivery, DeliverySchedule
+    Admin, Customer, Supplier, Product, Inventory, Subscription, SubscriptionDetail,
+    DeliveryPerson, Order, OrderItem, Payment, Delivery, DeliverySchedule,
+    SupplierProduct
 )
 from schemas import (
     CustomerCreate, CustomerUpdate, CustomerResponse,
@@ -23,6 +24,8 @@ from schemas import (
     PaymentCreate, PaymentUpdate, PaymentResponse,
     DeliveryCreate, DeliveryUpdate, DeliveryResponse,
     DeliveryScheduleCreate, DeliveryScheduleUpdate, DeliveryScheduleResponse,
+    SupplierProductCreate, SupplierProductResponse,
+    LoginRequest, LoginResponse,
     MessageResponse
 )
 
@@ -47,6 +50,20 @@ def generate_next_id(db: Session, model, id_column) -> int:
     return (last[0] + 1) if last else 1
 
 
+def normalize_username(value: str) -> str:
+    return ''.join(ch.lower() for ch in str(value or '').strip() if ch.isalnum())
+
+
+def generate_unique_username(db: Session, model, name: str, fallback: str) -> str:
+    base = normalize_username(name.split()[0] if name else '') or normalize_username(fallback) or 'user'
+    username = base
+    suffix = 1
+    while db.query(model).filter(model.User_Name == username).first():
+        username = f"{base}{suffix}"
+        suffix += 1
+    return username
+
+
 # Root endpoint
 @app.get("/")
 def read_root():
@@ -56,6 +73,43 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+# ==================== AUTHENTICATION ====================
+@app.post("/api/login", response_model=LoginResponse)
+def login(login_request: LoginRequest, db: Session = Depends(get_db)):
+    print("Login attempt:", login_request)
+    if login_request.Role == 'admin':
+        admin = db.query(Admin).filter(Admin.User_Name == login_request.User_Name, Admin.Password == login_request.Password).first()
+        if admin:
+            return LoginResponse(id=admin.Admin_ID, role='admin', name=admin.Name or admin.User_Name)
+    elif login_request.Role == 'customer':
+        customer = db.query(Customer).filter(Customer.User_Name == login_request.User_Name, Customer.Password == login_request.Password).first()
+        if customer:
+            return LoginResponse(id=customer.Customer_ID, role='customer', name=customer.Name)
+    elif login_request.Role == 'supplier':
+        supplier = db.query(Supplier).filter(Supplier.User_Name == login_request.User_Name, Supplier.Password == login_request.Password).first()
+        if supplier:
+            return LoginResponse(id=supplier.Supplier_ID, role='supplier', name=supplier.Supplier_Name)
+    elif login_request.Role == 'delivery':
+        delivery_person = db.query(DeliveryPerson).filter(DeliveryPerson.User_Name == login_request.User_Name, DeliveryPerson.Password == login_request.Password).first()
+        if delivery_person:
+            return LoginResponse(id=delivery_person.DeliveryPerson_ID, role='delivery', name=delivery_person.Name)
+    else:
+        admin = db.query(Admin).filter(Admin.User_Name == login_request.User_Name, Admin.Password == login_request.Password).first()
+        if admin:
+            return LoginResponse(id=admin.Admin_ID, role='admin', name=admin.Name or admin.User_Name)
+        customer = db.query(Customer).filter(Customer.User_Name == login_request.User_Name, Customer.Password == login_request.Password).first()
+        if customer:
+            return LoginResponse(id=customer.Customer_ID, role='customer', name=customer.Name)
+        supplier = db.query(Supplier).filter(Supplier.User_Name == login_request.User_Name, Supplier.Password == login_request.Password).first()
+        if supplier:
+            return LoginResponse(id=supplier.Supplier_ID, role='supplier', name=supplier.Supplier_Name)
+        delivery_person = db.query(DeliveryPerson).filter(DeliveryPerson.User_Name == login_request.User_Name, DeliveryPerson.Password == login_request.Password).first()
+        if delivery_person:
+            return LoginResponse(id=delivery_person.DeliveryPerson_ID, role='delivery', name=delivery_person.Name)
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
 
 # ==================== CUSTOMER ENDPOINTS ====================
@@ -73,11 +127,15 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/customers", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
 def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
-    existing = db.query(Customer).filter(Customer.Phone_Num == customer.Phone_Num).first()
-    if existing:
+    if db.query(Customer).filter(Customer.Phone_Num == customer.Phone_Num).first():
         raise HTTPException(status_code=400, detail="Phone number already registered")
+    payload = customer.model_dump()
+    payload['User_Name'] = payload.get('User_Name') or generate_unique_username(db, Customer, customer.Name, customer.Phone_Num)
+    payload['Password'] = payload.get('Password') or customer.Phone_Num or 'changeme123'
+    if db.query(Customer).filter(Customer.User_Name == payload['User_Name']).first():
+        raise HTTPException(status_code=400, detail="Username already registered")
     new_id = generate_next_id(db, Customer, Customer.Customer_ID)
-    db_customer = Customer(Customer_ID=new_id, **customer.model_dump())
+    db_customer = Customer(Customer_ID=new_id, **payload)
     db.add(db_customer)
     db.commit()
     db.refresh(db_customer)
@@ -92,6 +150,10 @@ def update_customer(customer_id: int, customer: CustomerUpdate, db: Session = De
         existing = db.query(Customer).filter(Customer.Phone_Num == customer.Phone_Num).first()
         if existing:
             raise HTTPException(status_code=400, detail="Phone number already registered")
+    if customer.User_Name and customer.User_Name != db_customer.User_Name:
+        existing = db.query(Customer).filter(Customer.User_Name == customer.User_Name).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already registered")
     for field, value in customer.model_dump(exclude_unset=True).items():
         setattr(db_customer, field, value)
     db.commit()
@@ -123,8 +185,13 @@ def get_supplier(supplier_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/suppliers", response_model=SupplierResponse, status_code=status.HTTP_201_CREATED)
 def create_supplier(supplier: SupplierCreate, db: Session = Depends(get_db)):
+    payload = supplier.model_dump()
+    payload['User_Name'] = payload.get('User_Name') or generate_unique_username(db, Supplier, supplier.Supplier_Name, supplier.Phone_Num)
+    payload['Password'] = payload.get('Password') or supplier.Phone_Num or 'changeme123'
+    if db.query(Supplier).filter(Supplier.User_Name == payload['User_Name']).first():
+        raise HTTPException(status_code=400, detail="Username already registered")
     new_id = generate_next_id(db, Supplier, Supplier.Supplier_ID)
-    db_supplier = Supplier(Supplier_ID=new_id, **supplier.model_dump())
+    db_supplier = Supplier(Supplier_ID=new_id, **payload)
     db.add(db_supplier)
     db.commit()
     db.refresh(db_supplier)
@@ -135,6 +202,10 @@ def update_supplier(supplier_id: int, supplier: SupplierUpdate, db: Session = De
     db_supplier = db.query(Supplier).filter(Supplier.Supplier_ID == supplier_id).first()
     if not db_supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
+    if supplier.User_Name and supplier.User_Name != db_supplier.User_Name:
+        existing = db.query(Supplier).filter(Supplier.User_Name == supplier.User_Name).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already registered")
     for field, value in supplier.model_dump(exclude_unset=True).items():
         setattr(db_supplier, field, value)
     db.commit()
@@ -346,8 +417,13 @@ def get_delivery_person(person_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/delivery-persons", response_model=DeliveryPersonResponse, status_code=status.HTTP_201_CREATED)
 def create_delivery_person(person: DeliveryPersonCreate, db: Session = Depends(get_db)):
+    payload = person.model_dump()
+    payload['User_Name'] = payload.get('User_Name') or generate_unique_username(db, DeliveryPerson, person.Name, person.Phone_Num)
+    payload['Password'] = payload.get('Password') or person.Phone_Num or 'changeme123'
+    if db.query(DeliveryPerson).filter(DeliveryPerson.User_Name == payload['User_Name']).first():
+        raise HTTPException(status_code=400, detail="Username already registered")
     new_id = generate_next_id(db, DeliveryPerson, DeliveryPerson.DeliveryPerson_ID)
-    db_person = DeliveryPerson(DeliveryPerson_ID=new_id, **person.model_dump())
+    db_person = DeliveryPerson(DeliveryPerson_ID=new_id, **payload)
     db.add(db_person)
     db.commit()
     db.refresh(db_person)
@@ -595,6 +671,40 @@ def delete_delivery_schedule(schedule_id: int, db: Session = Depends(get_db)):
     db.delete(db_schedule)
     db.commit()
     return MessageResponse(message="Delivery schedule deleted successfully")
+
+
+# ==================== SUPPLIER PRODUCT ENDPOINTS ====================
+
+@app.get("/api/supplier-products", response_model=List[SupplierProductResponse])
+def get_all_supplier_products(db: Session = Depends(get_db)):
+    return db.query(SupplierProduct).all()
+
+@app.get("/api/supplier-products/{supplier_id}", response_model=List[SupplierProductResponse])
+def get_supplier_products_by_supplier(supplier_id: int, db: Session = Depends(get_db)):
+    return db.query(SupplierProduct).filter(SupplierProduct.Supplier_ID == supplier_id).all()
+
+@app.post("/api/supplier-products", response_model=SupplierProductResponse, status_code=status.HTTP_201_CREATED)
+def create_supplier_product(sp: SupplierProductCreate, db: Session = Depends(get_db)):
+    payload = sp.model_dump()
+    new_id = generate_next_id(db, SupplierProduct, SupplierProduct.ID)
+    payload['ID'] = new_id
+    db_sp = SupplierProduct(**payload)
+    db.add(db_sp)
+    db.commit()
+    db.refresh(db_sp)
+    return db_sp
+
+@app.delete("/api/supplier-products/{supplier_id}/{product_id}", response_model=MessageResponse)
+def delete_supplier_product(supplier_id: int, product_id: int, db: Session = Depends(get_db)):
+    db_sp = db.query(SupplierProduct).filter(
+        SupplierProduct.Supplier_ID == supplier_id,
+        SupplierProduct.Product_ID == product_id
+    ).first()
+    if not db_sp:
+        raise HTTPException(status_code=404, detail="Supplier-product link not found")
+    db.delete(db_sp)
+    db.commit()
+    return MessageResponse(message="Supplier-product link deleted successfully")
 
 
 if __name__ == "__main__":

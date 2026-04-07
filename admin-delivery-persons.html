@@ -106,6 +106,14 @@
           <label>Area Assigned *</label>
           <input type="text" id="f-area" class="form-control" placeholder="e.g. Koramangala" />
         </div>
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="f-username" class="form-control" placeholder="Login username" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="f-password" class="form-control" placeholder="Login password" />
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -113,6 +121,10 @@
       <button class="btn btn-primary" onclick="saveDP()">💾 Save</button>
     </div>
   </div>
+</div>
+
+<div id="loading-overlay" class="loading-overlay">
+  <div class="loading-spinner"></div>
 </div>
 
 <div id="toast-container" class="toast-container"></div>
@@ -140,7 +152,7 @@
     } catch (error) { showToast('Failed to load: ' + error.message, 'error'); }
   }
 
-  function getDPDeliveries(id) { return allDeliveries.filter(d => d.DeliveryPerson_ID === id).length; }
+  function getDPDeliveries(id) { return allDeliveries.filter(d => d.DeliveryPerson_ID == id).length; }
 
   function renderCards(data) {
     document.getElementById('dp-cards').innerHTML = data.map(dp => `
@@ -172,8 +184,8 @@
         <td><span class="badge badge-muted">${getDPDeliveries(dp.DeliveryPerson_ID)} total</span></td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editDP(${dp.DeliveryPerson_ID})">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteDP(${dp.DeliveryPerson_ID})">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editDP('${dp.DeliveryPerson_ID}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteDP('${dp.DeliveryPerson_ID}')">🗑️</button>
           </div>
         </td>
       </tr>`).join('');
@@ -193,13 +205,13 @@
   function openAddModal() {
     editingId = null;
     document.getElementById('modal-title').textContent = 'Add Delivery Person';
-    ['f-name','f-phone','f-area'].forEach(id => document.getElementById(id).value = '');
+    ['f-name','f-phone','f-area','f-username','f-password'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('f-vehicle').value = 'Bicycle';
     openModal('dp-modal');
   }
 
   function editDP(id) {
-    const dp = allDPs.find(x => x.DeliveryPerson_ID === id);
+    const dp = allDPs.find(x => x.DeliveryPerson_ID == id);
     if (!dp) return;
     editingId = id;
     document.getElementById('modal-title').textContent = 'Edit Delivery Person';
@@ -207,6 +219,8 @@
     document.getElementById('f-phone').value   = dp.Phone_Num;
     document.getElementById('f-vehicle').value = dp.VehicleType||'Bicycle';
     document.getElementById('f-area').value    = dp.Area_assigned||'';
+    document.getElementById('f-username').value = dp.User_Name || '';
+    document.getElementById('f-password').value = '';
     openModal('dp-modal');
   }
 
@@ -215,8 +229,13 @@
     const phone   = document.getElementById('f-phone').value.trim();
     const vehicle = document.getElementById('f-vehicle').value;
     const area    = document.getElementById('f-area').value.trim();
+    const username = document.getElementById('f-username').value.trim();
+    const password = document.getElementById('f-password').value.trim();
     if (!name || !phone || !area) { showToast('Please fill all required fields', 'error'); return; }
     const data = { Name: name, Phone_Num: phone, VehicleType: vehicle, Area_assigned: area };
+    if (username) data.User_Name = username;
+    if (password) data.Password = password;
+    showLoading();
     try {
       if (editingId) {
         await DeliveryPersonAPI.update(editingId, data);
@@ -228,15 +247,18 @@
       closeModal('dp-modal');
       load();
     } catch (error) { showToast('Failed to save: ' + error.message, 'error'); }
+    finally { hideLoading(); }
   }
 
   async function deleteDP(id) {
     if (!confirmAction('Remove this delivery person?')) return;
+    showLoading();
     try {
       await DeliveryPersonAPI.delete(id);
       showToast('Deleted', 'warning');
       load();
     } catch (error) { showToast('Failed to delete: ' + error.message, 'error'); }
+    finally { hideLoading(); }
   }
 
   load();

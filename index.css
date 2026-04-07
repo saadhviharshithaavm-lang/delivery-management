@@ -762,6 +762,35 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .animate-fadeIn   { animation: fadeIn .4s ease; }
 .animate-scaleIn  { animation: scaleIn .3s ease; }
 
+/* ── Loading Overlay ── */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+}
+.loading-overlay.open {
+  display: flex;
+}
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top: 4px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 /* ── Responsive ── */
 @media (max-width: 1024px) {
   .dashboard-grid-2, .dashboard-grid-3 { grid-template-columns: 1fr; }

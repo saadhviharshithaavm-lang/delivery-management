@@ -161,8 +161,8 @@
         <td>${dm[d.DeliveryPerson_ID] || d.DeliveryPerson_ID}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editDelivery(${d.Delivery_ID})">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteDelivery(${d.Delivery_ID})">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editDelivery('${d.Delivery_ID}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteDelivery('${d.Delivery_ID}')">🗑️</button>
           </div>
         </td>
       </tr>`).join('');
@@ -192,7 +192,7 @@
   }
 
   function editDelivery(id) {
-    const d = allDeliveries.find(x => x.Delivery_ID === id);
+    const d = allDeliveries.find(x => x.Delivery_ID == id);
     if (!d) return;
     editingId = id;
     document.getElementById('modal-title').textContent = 'Edit Delivery';

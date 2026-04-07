@@ -156,8 +156,8 @@
         <td>${statusBadge(s.Schedule_status)}</td>
         <td>
           <div class="table-actions">
-            <button class="btn btn-secondary btn-xs" onclick="editSchedule(${s.Schedule_ID})">✏️ Edit</button>
-            <button class="btn btn-danger btn-xs" onclick="deleteSchedule(${s.Schedule_ID})">🗑️</button>
+            <button class="btn btn-secondary btn-xs" onclick="editSchedule('${s.Schedule_ID}')">✏️ Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteSchedule('${s.Schedule_ID}')">🗑️</button>
           </div>
         </td>
       </tr>`).join('');
@@ -191,7 +191,7 @@
   }
 
   function editSchedule(id) {
-    const s = allSchedules.find(x => x.Schedule_ID === id);
+    const s = allSchedules.find(x => x.Schedule_ID == id);
     if (!s) return;
     editingId = id;
     document.getElementById('modal-title').textContent = 'Edit Schedule';

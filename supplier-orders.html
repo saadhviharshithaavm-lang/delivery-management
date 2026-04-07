@@ -64,6 +64,7 @@
 <div id="toast-container" class="toast-container"></div>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const SUPPLIER_NAV = [
     { section: 'Portal', items: [
@@ -96,17 +97,22 @@
     buildSupplierSidebar('supplier-orders.html');
 
     async function load() {
-      const [allProducts, allOrders, allOrderItems] = await Promise.all([
-        API.products.getAll(),
-        API.orders.getAll(), 
-        API.orderItems.getAll()
+      const [allProducts, allOrders, allOrderItems, allSupplierProducts] = await Promise.all([
+        ProductAPI.getAll(),
+        OrderAPI.getAll(),
+        OrderItemAPI.getAll(),
+        SupplierProductAPI.getAll()
       ]);
 
-      const myProductIDs = allProducts.filter(p => p.Supplier_ID === session.id).map(p => p.Product_ID);
+      // Get product IDs that belong to this supplier via supplier_products junction table
+      const myProductIDs = allSupplierProducts
+        .filter(sp => String(sp.Supplier_ID) === String(session.id))
+        .map(sp => sp.Product_ID);
+
       const prodMap = Object.fromEntries(allProducts.map(p => [p.Product_ID, p.Product_Name]));
-      
+
       const myItems = allOrderItems.filter(i => myProductIDs.includes(i.Product_ID));
-      
+
       myOrderItemsData = myItems.map(i => {
         const o = allOrders.find(x => x.Order_ID === i.Order_ID) || {};
         return {

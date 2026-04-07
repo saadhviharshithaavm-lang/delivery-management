@@ -79,9 +79,14 @@
   </div>
 </div>
 
+<div id="loading-overlay" class="loading-overlay">
+  <div class="loading-spinner"></div>
+</div>
+
 <div id="toast-container" class="toast-container"></div>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/api-client.js"></script>
 <script>
   const SUPPLIER_NAV = [
     { section: 'Portal', items: [
@@ -113,77 +118,103 @@
     document.getElementById('supp-name').textContent = session.name;
 
     async function load() {
-      const [allProducts, allSuppliers, allInventory, allSubs, allSubDetails, allOrders, allOrderItems] = await Promise.all([
-        API.products.getAll(), API.suppliers.getAll(), API.inventory.getAll(),
-        API.subscriptions.getAll(), API.subscriptionDetails.getAll(),
-        API.orders.getAll(), API.orderItems.getAll()
-      ]);
+      showLoading();
+      try {
+        const [allProducts, allSuppliers, allInventory, allSubs, allSubDetails, allOrders, allOrderItems, allSupplierProducts] = await Promise.all([
+          ProductAPI.getAll().catch(err => { console.error('Products API failed:', err); return []; }),
+          SupplierAPI.getAll().catch(err => { console.error('Suppliers API failed:', err); return []; }),
+          InventoryAPI.getAll().catch(err => { console.error('Inventory API failed:', err); return []; }),
+          SubscriptionAPI.getAll().catch(err => { console.error('Subscriptions API failed:', err); return []; }),
+          SubscriptionDetailAPI.getAll().catch(err => { console.error('SubscriptionDetails API failed:', err); return []; }),
+          OrderAPI.getAll().catch(err => { console.error('Orders API failed:', err); return []; }),
+          OrderItemAPI.getAll().catch(err => { console.error('OrderItems API failed:', err); return []; }),
+          SupplierProductAPI.getAll().catch(err => { console.error('SupplierProducts API failed:', err); return []; })
+        ]);
 
-      const mySupplier   = allSuppliers.find(s => s.Supplier_ID === session.id);
-      const myProductIDs = allProducts.filter(p => p.Supplier_ID === session.id).map(p => p.Product_ID);
-      const myProducts   = allProducts.filter(p => p.Supplier_ID === session.id);
+        console.log('Supplier session:', session);
+        console.log('All suppliers:', allSuppliers);
+        console.log('All supplier products:', allSupplierProducts);
 
-      // Stats
-      const mySubs = allSubs.filter(s => s.Supplier_ID === session.id);
-      const myOrderItems = allOrderItems.filter(i => myProductIDs.includes(i.Product_ID));
-      const myOrderIDs   = [...new Set(myOrderItems.map(i => i.Order_ID))];
-      const myOrders     = allOrders.filter(o => myOrderIDs.includes(o.Order_ID));
+        const mySupplier = allSuppliers.find(s => String(s.Supplier_ID) === String(session.id));
+        console.log('My supplier:', mySupplier);
 
-      document.getElementById('s-products').textContent  = myProducts.length;
-      document.getElementById('s-subs').textContent      = mySubs.filter(s => s.Status === 'Active').length;
-      document.getElementById('s-pending').textContent   = myOrders.filter(o => o.Order_status === 'Pending').length;
-      document.getElementById('s-fulfilled').textContent = myOrders.filter(o => o.Order_status === 'Delivered').length;
+        // Get product IDs that belong to this supplier via supplier_products junction table
+        const myProductIDs = allSupplierProducts
+          .filter(sp => String(sp.Supplier_ID) === String(session.id))
+          .map(sp => sp.Product_ID);
 
-      // Products table
-      const prodBody = document.getElementById('my-products-body');
-      const invMap = Object.fromEntries(allInventory.map(i => [i.Product_ID, i.Available_quantity]));
-      prodBody.innerHTML = myProducts.length
-        ? myProducts.map(p => `<tr>
-            <td><strong>${p.Product_Name}</strong></td>
-            <td>${p.Unit}</td>
-            <td class="fw-700" style="color:var(--primary)">${formatCurrency(p.Price)}</td>
-            <td>
-              <span class="fw-700">${invMap[p.Product_ID] ?? '—'}</span>
-              ${(invMap[p.Product_ID] ?? 999) < 50
-                ? '<span class="badge badge-warning" style="margin-left:6px">Low Stock</span>'
-                : '<span class="badge badge-success" style="margin-left:6px">OK</span>'}
-            </td>
-          </tr>`).join('')
-        : '<tr><td colspan="4" class="text-center text-muted" style="padding:20px">No products assigned yet</td></tr>';
+        console.log('My product IDs:', myProductIDs);
 
-      // Orders table
-      const orderBody = document.getElementById('my-orders-body');
-      const prodMap = Object.fromEntries(allProducts.map(p => [p.Product_ID, p.Product_Name]));
-      const myRelevantItems = myOrderItems.slice(0, 15);
-      orderBody.innerHTML = myRelevantItems.length
-        ? myRelevantItems.map(i => {
-            const o = allOrders.find(x => x.Order_ID === i.Order_ID);
-            return `<tr>
-              <td class="fw-700">${i.Order_ID}</td>
-              <td>${prodMap[i.Product_ID] || i.Product_ID}</td>
-              <td>${i.Quantity}</td>
-              <td>${o ? formatDate(o.Order_date) : '—'}</td>
-              <td>${o ? statusBadge(o.Order_status) : '—'}</td>
-            </tr>`;
-          }).join('')
-        : '<tr><td colspan="5" class="text-center text-muted" style="padding:20px">No orders yet</td></tr>';
+        const myProducts = allProducts.filter(p => myProductIDs.includes(p.Product_ID));
+        console.log('My products:', myProducts);
 
-      // Subscriptions table
-      const subBody = document.getElementById('my-subs-body');
-      const mySubDetails = allSubDetails.filter(d => myProductIDs.includes(d.Product_ID));
-      subBody.innerHTML = mySubDetails.length
-        ? mySubDetails.map(d => {
-            const sub = allSubs.find(s => s.Subscription_ID === d.Subscription_ID);
-            return `<tr>
-              <td>${d.Subscription_ID}</td>
-              <td>${sub?.Customer_ID || '—'}</td>
-              <td>${prodMap[d.Product_ID] || d.Product_ID}</td>
-              <td>${d.Quantity_Per_Day}</td>
-              <td><span class="badge badge-muted">${d.Delivery_Frequency}</span></td>
-              <td>${sub ? statusBadge(sub.Status) : '—'}</td>
-            </tr>`;
-          }).join('')
-        : '<tr><td colspan="6" class="text-center text-muted" style="padding:20px">No subscriptions</td></tr>';
+        // Stats
+        const mySubs = allSubs.filter(s => String(s.Supplier_ID) === String(session.id));
+        const myOrderItems = allOrderItems.filter(i => myProductIDs.includes(i.Product_ID));
+        const myOrderIDs = [...new Set(myOrderItems.map(i => i.Order_ID))];
+        const myOrders = allOrders.filter(o => myOrderIDs.includes(o.Order_ID));
+
+        document.getElementById('s-products').textContent = myProducts.length;
+        document.getElementById('s-subs').textContent = mySubs.filter(s => s.Status === 'Active').length;
+        document.getElementById('s-pending').textContent = myOrders.filter(o => o.Order_status === 'Pending').length;
+        document.getElementById('s-fulfilled').textContent = myOrders.filter(o => o.Order_status === 'Delivered').length;
+
+        // Products table
+        const prodBody = document.getElementById('my-products-body');
+        const invMap = Object.fromEntries(allInventory.map(i => [i.Product_ID, i.Available_quantity]));
+        prodBody.innerHTML = myProducts.length
+          ? myProducts.map(p => `<tr>
+              <td><strong>${p.Product_Name}</strong></td>
+              <td>${p.Unit}</td>
+              <td class="fw-700" style="color:var(--primary)">${formatCurrency(p.Price_per_unit)}</td>
+              <td>
+                <span class="fw-700">${invMap[p.Product_ID] ?? '—'}</span>
+                ${(invMap[p.Product_ID] ?? 999) < 50
+                  ? '<span class="badge badge-warning" style="margin-left:6px">Low Stock</span>'
+                  : '<span class="badge badge-success" style="margin-left:6px">OK</span>'}
+              </td>
+            </tr>`).join('')
+          : '<tr><td colspan="4" class="text-center text-muted" style="padding:20px">No products assigned yet</td></tr>';
+
+        // Orders table
+        const orderBody = document.getElementById('my-orders-body');
+        const prodMap = Object.fromEntries(allProducts.map(p => [p.Product_ID, p.Product_Name]));
+        const myRelevantItems = myOrderItems.slice(0, 15);
+        orderBody.innerHTML = myRelevantItems.length
+          ? myRelevantItems.map(i => {
+              const o = allOrders.find(x => x.Order_ID === i.Order_ID);
+              return `<tr>
+                <td class="fw-700">${i.Order_ID}</td>
+                <td>${prodMap[i.Product_ID] || i.Product_ID}</td>
+                <td>${i.Quantity}</td>
+                <td>${o ? formatDate(o.Order_date) : '—'}</td>
+                <td>${o ? statusBadge(o.Order_status) : '—'}</td>
+              </tr>`;
+            }).join('')
+          : '<tr><td colspan="5" class="text-center text-muted" style="padding:20px">No orders yet</td></tr>';
+
+        // Subscriptions table
+        const subBody = document.getElementById('my-subs-body');
+        const mySubDetails = allSubDetails.filter(d => myProductIDs.includes(d.Product_ID));
+        subBody.innerHTML = mySubDetails.length
+          ? mySubDetails.map(d => {
+              const sub = allSubs.find(s => s.Subscription_ID === d.Subscription_ID);
+              return `<tr>
+                <td>${d.Subscription_ID}</td>
+                <td>${sub?.Customer_ID || '—'}</td>
+                <td>${prodMap[d.Product_ID] || d.Product_ID}</td>
+                <td>${d.Quantity_Per_Day}</td>
+                <td><span class="badge badge-muted">${d.Delivery_Frequency}</span></td>
+                <td>${sub ? statusBadge(sub.Status) : '—'}</td>
+              </tr>`;
+            }).join('')
+          : '<tr><td colspan="6" class="text-center text-muted" style="padding:20px">No subscriptions</td></tr>';
+      } catch (error) {
+        console.error('Load failed:', error);
+        showToast('Failed to load dashboard: ' + error.message, 'error');
+      } finally {
+        hideLoading();
+      }
     }
 
     load();
