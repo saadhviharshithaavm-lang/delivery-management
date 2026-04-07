@@ -62,6 +62,7 @@
             <thead>
               <tr>
                 <th>Sub ID</th>
+                <th>Customer</th>
                 <th>Supplier</th>
                 <th>Start Date</th>
                 <th>End Date</th>
@@ -89,6 +90,10 @@
     </div>
     <div class="modal-body">
       <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label>Customer *</label>
+          <select id="f-customer" class="form-control"></select>
+        </div>
         <div class="form-group">
           <label>Supplier *</label>
           <select id="f-supplier" class="form-control"></select>
@@ -130,14 +135,14 @@
   buildAdminSidebar('admin-subscriptions.html');
   initModalClosers();
 
-  let allSubs = [], allSuppliers = [], allDetails = [], allProducts = [];
+  let allSubs = [], allSuppliers = [], allDetails = [], allProducts = [], allCustomers = [];
   let editingId = null;
 
   async function load() {
     try {
-      [allSubs, allSuppliers, allDetails, allProducts] = await Promise.all([
+      [allSubs, allSuppliers, allDetails, allProducts, allCustomers] = await Promise.all([
         SubscriptionAPI.getAll(), SupplierAPI.getAll(),
-        SubscriptionDetailAPI.getAll(), ProductAPI.getAll()
+        SubscriptionDetailAPI.getAll(), ProductAPI.getAll(), CustomerAPI.getAll()
       ]);
       document.getElementById('s-active').textContent    = allSubs.filter(s => s.Status === 'Active').length;
       document.getElementById('s-paused').textContent    = allSubs.filter(s => s.Status === 'Paused').length;
@@ -148,6 +153,7 @@
   }
 
   const suppMap = () => Object.fromEntries(allSuppliers.map(s => [s.Supplier_ID, s.Supplier_Name]));
+  const custMap = () => Object.fromEntries(allCustomers.map(c => [c.Customer_ID, c.Name]));
 
   function getSubProducts(sid) {
     return allDetails.filter(d => d.Subscription_ID == sid).map(d => {
@@ -159,14 +165,16 @@
   function renderTable(data) {
     const body = document.getElementById('subs-body');
     const sm = suppMap();
+    const cm = custMap();
     if (!data.length) {
-      body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-title">No subscriptions found</div></div></td></tr>';
+      body.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-title">No subscriptions found</div></div></td></tr>';
       return;
     }
     body.innerHTML = data.map(s => {
       const prods = getSubProducts(s.Subscription_ID);
       return `<tr>
         <td class="td-muted">${s.Subscription_ID}</td>
+        <td>${cm[s.Customer_ID] || s.Customer_ID}</td>
         <td>${sm[s.Supplier_ID] || s.Supplier_ID}</td>
         <td>${formatDate(s.Start_date)}</td>
         <td>${formatDate(s.End_date)}</td>
@@ -186,13 +194,15 @@
     const q  = document.getElementById('search-input').value.toLowerCase();
     const st = document.getElementById('status-filter').value;
     const sm = suppMap();
+    const cm = custMap();
     renderTable(allSubs.filter(s =>
-      (!q || String(s.Subscription_ID).includes(q) || (sm[s.Supplier_ID]||'').toLowerCase().includes(q)) &&
+      (!q || String(s.Subscription_ID).includes(q) || (sm[s.Supplier_ID]||'').toLowerCase().includes(q) || (cm[s.Customer_ID]||'').toLowerCase().includes(q)) &&
       (!st || s.Status === st)
     ));
   }
 
   function populateDropdowns() {
+    document.getElementById('f-customer').innerHTML = allCustomers.map(c => `<option value="${c.Customer_ID}">${c.Name} (${c.Customer_ID})</option>`).join('');
     document.getElementById('f-supplier').innerHTML = allSuppliers.map(s => `<option value="${s.Supplier_ID}">${s.Supplier_Name}</option>`).join('');
   }
 
@@ -200,6 +210,8 @@
     editingId = null;
     document.getElementById('modal-title').textContent = 'Add Subscription';
     populateDropdowns();
+    document.getElementById('f-customer').value = '';
+    document.getElementById('f-supplier').value = '';
     document.getElementById('f-start').value = new Date().toISOString().slice(0,10);
     document.getElementById('f-end').value = '';
     document.getElementById('f-status').value = 'Active';
@@ -212,6 +224,7 @@
     editingId = id;
     document.getElementById('modal-title').textContent = 'Edit Subscription';
     populateDropdowns();
+    document.getElementById('f-customer').value = s.Customer_ID;
     document.getElementById('f-supplier').value = s.Supplier_ID;
     document.getElementById('f-start').value  = s.Start_date;
     document.getElementById('f-end').value    = s.End_date;
@@ -221,12 +234,13 @@
 
   async function saveSub() {
     const data = {
+      Customer_ID: parseInt(document.getElementById('f-customer').value),
       Supplier_ID: parseInt(document.getElementById('f-supplier').value),
       Start_date:  document.getElementById('f-start').value,
       End_date:    document.getElementById('f-end').value,
       Status:      document.getElementById('f-status').value,
     };
-    if (!data.Start_date || !data.End_date) { showToast('Please fill all required fields', 'error'); return; }
+    if (!data.Customer_ID || !data.Start_date || !data.End_date) { showToast('Please fill all required fields', 'error'); return; }
     try {
       if (editingId) {
         await SubscriptionAPI.update(editingId, data);

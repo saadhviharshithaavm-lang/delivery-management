@@ -67,6 +67,7 @@ class Subscription(Base):
     __tablename__ = "SUBSCRIPTION"
 
     Subscription_ID = Column("SUBSCRIPTION_ID", Integer, primary_key=True, index=True)
+    Customer_ID = Column("CUSTOMER_ID", Integer, ForeignKey("CUSTOMER.CUSTOMER_ID"))
     Supplier_ID = Column("SUPPLIER_ID", Integer, ForeignKey("SUPPLIER.SUPPLIER_ID"))
     Start_date = Column("START_DATE", Date)
     End_date = Column("END_DATE", Date)

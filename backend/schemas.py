@@ -99,6 +99,7 @@ class InventoryResponse(InventoryBase):
 
 # ==================== SUBSCRIPTION ====================
 class SubscriptionBase(BaseModel):
+    Customer_ID: int
     Supplier_ID: int
     Start_date: date
     End_date: date
@@ -108,6 +109,7 @@ class SubscriptionCreate(SubscriptionBase):
     pass
 
 class SubscriptionUpdate(BaseModel):
+    Customer_ID: Optional[int] = None
     Supplier_ID: Optional[int] = None
     Start_date: Optional[date] = None
     End_date: Optional[date] = None
