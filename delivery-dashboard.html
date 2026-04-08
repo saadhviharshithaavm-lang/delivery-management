@@ -263,7 +263,18 @@
           await OrderAPI.update(delivery.Order_ID, { Order_status: 'Delivered' });
         }
 
-        showToast(newStatus === 'Delivered' ? '✅ Marked as Delivered!' : '🔄 Status updated!');
+        // If marked as delivered, also update the order status
+        console.log('Updating order status for Order_ID:', delivery.Order_ID,newStatus);
+        if (newStatus === 'Failed') {
+          await OrderAPI.update(delivery.Order_ID, { Order_status: 'Failed' });
+        }
+
+        toastMsg = '🔄 Status updated!'
+        if(newStatus === 'Delivered') toastMsg = '✅ Marked as Delivered!'
+        else if(newStatus === 'Failed') toastMsg = '❌ Order could not be delivered!. Amount paid will be refunded.'
+
+        // showToast(newStatus === 'Delivered' ? '✅ Marked as Delivered!' : '🔄 Status updated!');
+        showToast(toastMsg);
         closeModal('status-modal');
         load();
       } catch (error) {

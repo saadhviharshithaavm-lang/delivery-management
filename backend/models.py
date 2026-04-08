@@ -57,9 +57,14 @@ class Inventory(Base):
     __tablename__ = "INVENTORY"
 
     Inventory_ID = Column("INVENTORY_ID", Integer, primary_key=True, index=True)
-    Product_ID = Column("PRODUCT_ID", Integer, ForeignKey("PRODUCT.PRODUCT_ID"), unique=True)
+    Product_ID = Column("PRODUCT_ID", Integer, ForeignKey("PRODUCT.PRODUCT_ID"))
+    Supplier_ID = Column("SUPPLIER_ID", Integer, ForeignKey("SUPPLIER.SUPPLIER_ID"))
     Available_quantity = Column("AVAILABLE_QUANTITY", Integer, default=0)
     LastUpdated = Column("LASTUPDATED", Date)
+
+    # __table_args__ = (
+    #     UniqueConstraint('Product_ID', 'Supplier_ID', name='unique_product_supplier_inventory'),
+    # )
 
 
 # Subscription Model
@@ -112,7 +117,7 @@ class Order(Base):
     Total_amount = Column("TOTAL_AMOUNT", Float)
 
     __table_args__ = (
-        CheckConstraint("ORDER_STATUS IN ('Pending', 'Processing', 'Delivered', 'Cancelled')", name='chk_order_status'),
+        CheckConstraint("ORDER_STATUS IN ('Pending', 'Processing', 'Delivered', 'Failed','Cancelled')", name='chk_order_status'),
     )
 
 

@@ -37,10 +37,13 @@ CREATE TABLE IF NOT EXISTS products (
 -- ==================== INVENTORY TABLE ====================
 CREATE TABLE IF NOT EXISTS inventory (
     Inventory_ID VARCHAR(10) PRIMARY KEY,
-    Product_ID VARCHAR(10) UNIQUE NOT NULL,
+    Product_ID VARCHAR(10) NOT NULL,
+    Supplier_ID VARCHAR(10) NOT NULL,
     Available_quantity INT DEFAULT 0,
     LastUpdated DATE,
-    FOREIGN KEY (Product_ID) REFERENCES products(Product_ID) ON DELETE CASCADE
+    FOREIGN KEY (Product_ID) REFERENCES products(Product_ID) ON DELETE CASCADE,
+    FOREIGN KEY (Supplier_ID) REFERENCES suppliers(Supplier_ID) ON DELETE CASCADE,
+    UNIQUE KEY unique_product_supplier (Product_ID, Supplier_ID)
 );
 
 -- ==================== SUBSCRIPTIONS TABLE ====================

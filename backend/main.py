@@ -34,7 +34,7 @@ load_dotenv()
 app = FastAPI(title="FreshDeliver API", version="1.0.0")
 
 # CORS Configuration
-origins = os.getenv("CORS_ORIGINS", "http://localhost:8080").split(",")
+origins = os.getenv("CORS_ORIGINS", "http://localhost:8080,http://192.168.1.27:8080").split(",")
 
 app.add_middleware(
     CORSMiddleware,

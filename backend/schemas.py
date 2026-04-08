@@ -81,6 +81,7 @@ class ProductResponse(ProductBase):
 # ==================== INVENTORY ====================
 class InventoryBase(BaseModel):
     Product_ID: int
+    Supplier_ID: int
     Available_quantity: int = 0
     LastUpdated: Optional[date] = None
 
@@ -89,6 +90,7 @@ class InventoryCreate(InventoryBase):
 
 class InventoryUpdate(BaseModel):
     Product_ID: Optional[int] = None
+    Supplier_ID: Optional[int] = None
     Available_quantity: Optional[int] = None
     LastUpdated: Optional[date] = None
 
@@ -185,7 +187,7 @@ class LoginResponse(BaseModel):
 class OrderBase(BaseModel):
     Customer_ID: int
     Order_date: date
-    Order_status: Literal['Pending', 'Confirmed', 'Processing', 'Delivered', 'Cancelled'] = 'Pending'
+    Order_status: Literal['Pending', 'Processing', 'Delivered', 'Failed', 'Cancelled'] = 'Pending'
     Total_amount: float
 
 class OrderCreate(OrderBase):
@@ -194,7 +196,7 @@ class OrderCreate(OrderBase):
 class OrderUpdate(BaseModel):
     Customer_ID: Optional[int] = None
     Order_date: Optional[date] = None
-    Order_status: Optional[Literal['Pending', 'Confirmed', 'Processing', 'Delivered', 'Cancelled']] = None
+    Order_status: Optional[Literal['Pending', 'Processing', 'Delivered', 'Failed', 'Cancelled']] = None
     Total_amount: Optional[float] = None
 
 class OrderResponse(OrderBase):

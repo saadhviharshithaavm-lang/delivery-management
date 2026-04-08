@@ -161,7 +161,11 @@
 
         // Products table
         const prodBody = document.getElementById('my-products-body');
-        const invMap = Object.fromEntries(allInventory.map(i => [i.Product_ID, i.Available_quantity]));
+        const invMap = Object.fromEntries(
+          allInventory
+            .filter(i => String(i.Supplier_ID) === String(session.id))
+            .map(i => [i.Product_ID, i.Available_quantity])
+        );
         prodBody.innerHTML = myProducts.length
           ? myProducts.map(p => `<tr>
               <td><strong>${p.Product_Name}</strong></td>

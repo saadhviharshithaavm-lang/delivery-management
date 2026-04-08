@@ -32,7 +32,7 @@
           <div class="page-subtitle">Track and update product stock levels</div>
         </div>
         <div class="page-header-actions">
-          <button class="btn btn-primary" onclick="openAddModal()">➕ Add Inventory Record</button>
+          <button class="btn btn-primary" onclick="openAddModal()">➕ Add/Update Stock</button>
         </div>
       </div>
 
@@ -40,7 +40,7 @@
         <div class="table-toolbar">
           <div class="search-box">
             <span>🔍</span>
-            <input type="text" id="search-input" placeholder="Search product…" oninput="filterTable()" />
+            <input type="text" id="search-input" placeholder="Search product or supplier…" oninput="filterTable()" />
           </div>
           <select class="filter-select" id="stock-filter" onchange="filterTable()">
             <option value="">All Stock Levels</option>
@@ -53,6 +53,7 @@
             <thead>
               <tr>
                 <th>Inventory ID</th>
+                <th>Supplier</th>
                 <th>Product</th>
                 <th>Available Qty</th>
                 <th>Stock Level</th>
@@ -61,7 +62,7 @@
               </tr>
             </thead>
             <tbody id="inventory-body">
-              <tr><td colspan="6" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
+              <tr><td colspan="7" class="text-center text-muted" style="padding:32px">Loading…</td></tr>
             </tbody>
           </table>
         </div>
@@ -79,7 +80,11 @@
     </div>
     <div class="modal-body">
       <div class="form-grid form-grid-2">
-        <div class="form-group full">
+        <div class="form-group">
+          <label>Supplier *</label>
+          <select id="f-supplier" class="form-control"></select>
+        </div>
+        <div class="form-group">
           <label>Product *</label>
           <select id="f-product" class="form-control"></select>
         </div>
@@ -108,17 +113,22 @@
   buildAdminSidebar('admin-inventory.html');
   initModalClosers();
 
-  let allInventory = [], allProducts = [];
+  let allInventory = [], allProducts = [], allSuppliers = [];
   let editingId = null;
 
   async function load() {
     try {
-      [allInventory, allProducts] = await Promise.all([InventoryAPI.getAll(), ProductAPI.getAll()]);
+      [allInventory, allProducts, allSuppliers] = await Promise.all([
+        InventoryAPI.getAll(), 
+        ProductAPI.getAll(), 
+        SupplierAPI.getAll()
+      ]);
       renderTable(allInventory);
     } catch (error) { showToast('Failed to load: ' + error.message, 'error'); }
   }
 
   function getProductName(pid) { return allProducts.find(p => p.Product_ID == pid)?.Product_Name || pid; }
+  function getSupplierName(sid) { return allSuppliers.find(s => s.Supplier_ID == sid)?.Supplier_Name || sid; }
 
   function stockBadge(qty) {
     if (qty < 25) return '<span class="badge badge-danger">Critical</span>';
@@ -140,12 +150,13 @@
   function renderTable(data) {
     const body = document.getElementById('inventory-body');
     if (!data.length) {
-      body.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No inventory records</div></div></td></tr>';
+      body.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No inventory records</div></div></td></tr>';
       return;
     }
     body.innerHTML = data.map(i => `
       <tr>
         <td class="td-muted">${i.Inventory_ID}</td>
+        <td><strong>${getSupplierName(i.Supplier_ID)}</strong></td>
         <td><strong>${getProductName(i.Product_ID)}</strong></td>
         <td><span class="fw-700" style="font-size:1.05rem">${i.Available_quantity}</span> <span class="td-muted">${allProducts.find(p=>p.Product_ID===i.Product_ID)?.Unit||''}</span></td>
         <td>${stockBadge(i.Available_quantity)}<div style="margin-top:6px">${stockBar(i.Available_quantity)}</div></td>
@@ -164,7 +175,8 @@
     const sf = document.getElementById('stock-filter').value;
     const filtered = allInventory.filter(i => {
       const pname = getProductName(i.Product_ID).toLowerCase();
-      const matchQ = !q || pname.includes(q);
+      const sname = getSupplierName(i.Supplier_ID).toLowerCase();
+      const matchQ = !q || pname.includes(q) || sname.includes(q);
       const matchS = !sf || (sf === 'low' ? i.Available_quantity < 50 : i.Available_quantity >= 50);
       return matchQ && matchS;
     });
@@ -177,10 +189,17 @@
     ).join('');
   }
 
+  function buildSupplierOptions(selectedSid = '') {
+    document.getElementById('f-supplier').innerHTML = allSuppliers.map(s =>
+      `<option value="${s.Supplier_ID}" ${s.Supplier_ID == selectedSid ? 'selected' : ''}>${s.Supplier_Name}</option>`
+    ).join('');
+  }
+
   function openAddModal() {
     editingId = null;
-    document.getElementById('modal-title').textContent = 'Add Inventory Record';
+    document.getElementById('modal-title').textContent = 'Add/Update Stock';
     document.getElementById('f-qty').value = '';
+    buildSupplierOptions();
     buildProductOptions();
     openModal('inventory-modal');
   }
@@ -191,21 +210,39 @@
     editingId = id;
     document.getElementById('modal-title').textContent = 'Update Stock';
     document.getElementById('f-qty').value = inv.Available_quantity;
+    buildSupplierOptions(inv.Supplier_ID);
     buildProductOptions(inv.Product_ID);
     openModal('inventory-modal');
   }
 
   async function saveInventory() {
+    const sid = parseInt(document.getElementById('f-supplier').value);
     const pid = parseInt(document.getElementById('f-product').value);
     const qty = parseInt(document.getElementById('f-qty').value);
-    if (!pid || isNaN(qty) || qty < 0) { showToast('Please enter valid quantity', 'error'); return; }
+    if (!sid || !pid || isNaN(qty) || qty < 0) { showToast('Please fill all required fields with valid values', 'error'); return; }
     try {
       if (editingId) {
-        await InventoryAPI.update(editingId, { Product_ID: pid, Available_quantity: qty });
+        // Update existing record
+        await InventoryAPI.update(editingId, { Product_ID: pid, Supplier_ID: sid, Available_quantity: qty });
         showToast('Stock updated!');
       } else {
-        await InventoryAPI.create({ Product_ID: pid, Available_quantity: qty });
-        showToast('Inventory record added!');
+        // Check if inventory record already exists for this supplier-product combination
+        const existingRecord = allInventory.find(inv => inv.Product_ID == pid && inv.Supplier_ID == sid);
+        
+        if (existingRecord) {
+          // Update existing record by adding the new quantity
+          const newQty = existingRecord.Available_quantity + qty;
+          await InventoryAPI.update(existingRecord.Inventory_ID, { 
+            Product_ID: pid, 
+            Supplier_ID: sid, 
+            Available_quantity: newQty 
+          });
+          showToast(`Stock added! New total: ${newQty}`);
+        } else {
+          // Create new record
+          await InventoryAPI.create({ Product_ID: pid, Supplier_ID: sid, Available_quantity: qty });
+          showToast('New inventory record created!');
+        }
       }
       closeModal('inventory-modal');
       load();
